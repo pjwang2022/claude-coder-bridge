@@ -71,9 +71,10 @@ function createSessionMcpConfig(discordContext?: DiscordContext): string {
         args: [bridgeScriptPath],
         env: {
           DISCORD_CHANNEL_ID: discordContext?.channelId || "unknown",
-          DISCORD_CHANNEL_NAME: discordContext?.channelName || "unknown", 
+          DISCORD_CHANNEL_NAME: discordContext?.channelName || "unknown",
           DISCORD_USER_ID: discordContext?.userId || "unknown",
-          DISCORD_MESSAGE_ID: discordContext?.messageId || ""
+          DISCORD_MESSAGE_ID: discordContext?.messageId || "",
+          MCP_SERVER_PORT: process.env.MCP_SERVER_PORT || "3001"
         }
       }
     }

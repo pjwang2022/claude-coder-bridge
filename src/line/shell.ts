@@ -48,6 +48,7 @@ function createLineSessionMcpConfig(lineContext?: LineContext): string {
         env: {
           LINE_USER_ID: lineContext?.userId || 'unknown',
           LINE_PROJECT_NAME: lineContext?.projectName || 'unknown',
+          MCP_SERVER_PORT: process.env.MCP_SERVER_PORT || '3001',
         },
       },
     },

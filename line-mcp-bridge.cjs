@@ -4,9 +4,8 @@
 const http = require('http');
 const { Transform } = require('stream');
 
-console.error(`LINE MCP Bridge startup: LINE_USER_ID=${process.env.LINE_USER_ID}, LINE_PROJECT_NAME=${process.env.LINE_PROJECT_NAME}`);
-
-const MCP_SERVER_URL = 'http://localhost:3001/line/mcp';
+const MCP_PORT = process.env.MCP_SERVER_PORT || '3001';
+console.error(`LINE MCP Bridge startup: LINE_USER_ID=${process.env.LINE_USER_ID}, LINE_PROJECT_NAME=${process.env.LINE_PROJECT_NAME}, PORT=${MCP_PORT}`);
 
 const mcpTransform = new Transform({
   objectMode: false,
@@ -36,7 +35,7 @@ const mcpTransform = new Transform({
 
     const options = {
       hostname: 'localhost',
-      port: 3001,
+      port: parseInt(MCP_PORT),
       path: '/line/mcp',
       method: 'POST',
       headers,

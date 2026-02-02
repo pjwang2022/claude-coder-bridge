@@ -4,10 +4,9 @@
 const http = require('http');
 const { Transform } = require('stream');
 
+const MCP_PORT = process.env.MCP_SERVER_PORT || '3001';
 // Debug: Log environment variables at startup
-console.error(`MCP Bridge startup: DISCORD_CHANNEL_ID=${process.env.DISCORD_CHANNEL_ID}, DISCORD_CHANNEL_NAME=${process.env.DISCORD_CHANNEL_NAME}, DISCORD_USER_ID=${process.env.DISCORD_USER_ID}`);
-
-const MCP_SERVER_URL = 'http://localhost:3001/mcp';
+console.error(`MCP Bridge startup: DISCORD_CHANNEL_ID=${process.env.DISCORD_CHANNEL_ID}, DISCORD_CHANNEL_NAME=${process.env.DISCORD_CHANNEL_NAME}, DISCORD_USER_ID=${process.env.DISCORD_USER_ID}, PORT=${MCP_PORT}`);
 
 // Transform stream to handle MCP messages
 const mcpTransform = new Transform({
@@ -48,7 +47,7 @@ const mcpTransform = new Transform({
 
     const options = {
       hostname: 'localhost',
-      port: 3001,
+      port: parseInt(MCP_PORT),
       path: '/mcp',
       method: 'POST',
       headers
