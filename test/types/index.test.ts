@@ -103,16 +103,27 @@ describe('Types', () => {
   });
 
   describe('Config', () => {
-    it('should accept valid config structure', () => {
+    it('should accept config with discord', () => {
       const config: Config = {
-        discordToken: "token-123",
-        allowedUserId: "user-456",
-        baseFolder: "/test/folder"
+        baseFolder: "/test/folder",
+        discord: {
+          token: "token-123",
+          allowedUserId: "user-456",
+        },
       };
-      
-      expect(config.discordToken).toBe("token-123");
-      expect(config.allowedUserId).toBe("user-456");
+
       expect(config.baseFolder).toBe("/test/folder");
+      expect(config.discord?.token).toBe("token-123");
+      expect(config.discord?.allowedUserId).toBe("user-456");
+    });
+
+    it('should accept config without discord', () => {
+      const config: Config = {
+        baseFolder: "/test/folder",
+      };
+
+      expect(config.baseFolder).toBe("/test/folder");
+      expect(config.discord).toBeUndefined();
     });
   });
 });

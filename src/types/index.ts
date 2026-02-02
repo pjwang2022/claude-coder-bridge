@@ -52,7 +52,9 @@ export interface ChannelProcess {
 }
 
 export interface Config {
-  discordToken: string;
-  allowedUserId: string;
   baseFolder: string;
+  discord?: {
+    token: string;
+    allowedUserId: string;
+  };
 }

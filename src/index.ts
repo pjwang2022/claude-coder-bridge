@@ -8,24 +8,33 @@ import { LinePermissionManager } from './line/permission-manager.js';
 
 async function main() {
   const config = validateConfig();
-  
+  const lineConfig = validateLineConfig();
+
+  if (!config.discord && !lineConfig) {
+    console.error('No platform configured. Set DISCORD_TOKEN + ALLOWED_USER_ID for Discord, or LINE_CHANNEL_ACCESS_TOKEN + LINE_CHANNEL_SECRET for LINE.');
+    process.exit(1);
+  }
+
   // Start MCP Permission Server
   const mcpPort = parseInt(process.env.MCP_SERVER_PORT || '3001');
   const mcpServer = new MCPPermissionServer(mcpPort);
-  
+
   console.log('Starting MCP Permission Server...');
   await mcpServer.start();
-  
-  // Start Discord Bot and Claude Manager
-  const claudeManager = new ClaudeManager(config.baseFolder);
-  const bot = new DiscordBot(claudeManager, config.allowedUserId);
-  
-  // Connect MCP server to Discord bot for interactive approvals
-  mcpServer.setDiscordBot(bot);
 
-  // Optional: LINE Bot initialization
+  // Optional: Discord Bot
+  let bot: DiscordBot | undefined;
+  let claudeManager: ClaudeManager | undefined;
+
+  if (config.discord) {
+    claudeManager = new ClaudeManager(config.baseFolder);
+    bot = new DiscordBot(claudeManager, config.discord.allowedUserId);
+    mcpServer.setDiscordBot(bot);
+  }
+
+  // Optional: LINE Bot
   let lineClaudeManager: LINEClaudeManager | undefined;
-  const lineConfig = validateLineConfig();
+
   if (lineConfig) {
     console.log('Initializing LINE Bot...');
 
@@ -50,16 +59,14 @@ async function main() {
   const shutdown = async () => {
     console.log('Shutting down gracefully...');
 
-    // Stop MCP server first
     try {
       await mcpServer.stop();
     } catch (error) {
       console.error('Error stopping MCP server:', error);
     }
 
-    // Stop Claude managers
     try {
-      claudeManager.destroy();
+      claudeManager?.destroy();
     } catch (error) {
       console.error('Error stopping Claude manager:', error);
     }
@@ -75,17 +82,19 @@ async function main() {
 
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
-  
-  console.log('Starting Discord Bot...');
-  await bot.login(config.discordToken);
-  
-  // Expose MCP server to Discord bot for reaction handling
-  bot.setMCPServer(mcpServer);
-  
+
+  if (bot && config.discord) {
+    console.log('Starting Discord Bot...');
+    await bot.login(config.discord.token);
+    bot.setMCPServer(mcpServer);
+  }
+
   console.log('All services started successfully!');
-  console.log('MCP Server and Discord Bot are now connected for interactive approvals!');
+  if (config.discord) {
+    console.log('Discord Bot is ready.');
+  }
   if (lineConfig) {
-    console.log('LINE Bot is ready. Set webhook URL to: https://<your-domain>:3001/line/webhook');
+    console.log('LINE Bot is ready. Set webhook URL to: https://<your-domain>:' + mcpPort + '/line/webhook');
   }
 }
 
