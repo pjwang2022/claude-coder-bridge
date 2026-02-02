@@ -3,12 +3,14 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { z } from 'zod';
 import { PermissionManager } from './permission-manager.js';
+import type { LinePermissionManager } from '../line/permission-manager.js';
 
 export class MCPPermissionServer {
   private app: express.Application;
   private port: number;
   private server?: any;
   private permissionManager: PermissionManager;
+  private linePermissionManager?: LinePermissionManager;
 
   constructor(port: number = 3001) {
     this.port = port;
@@ -199,6 +201,83 @@ export class MCPPermissionServer {
     });
   }
 
+  // --- LINE Integration (additive) ---
+
+  setLinePermissionManager(linePermissionManager: LinePermissionManager): void {
+    this.linePermissionManager = linePermissionManager;
+  }
+
+  registerLineRoutes(lineBotHandler: any): void {
+    // LINE webhook endpoint
+    this.app.post('/line/webhook', (req, res) => lineBotHandler.handleWebhook(req, res));
+
+    // LINE MCP permission endpoint (mirrors /mcp but for LINE context)
+    this.app.post('/line/mcp', async (req, res) => {
+      try {
+        const lineUserId = req.headers['x-line-user-id'] as string | undefined;
+        const lineProjectName = req.headers['x-line-project-name'] as string | undefined;
+
+        const lineContext = lineUserId
+          ? { userId: lineUserId, projectName: lineProjectName || 'unknown' }
+          : undefined;
+
+        const mcpServer = new McpServer({
+          name: 'Claude Code LINE Permission Server',
+          version: '1.0.0',
+        });
+
+        mcpServer.tool(
+          'approve_tool',
+          {
+            tool_name: z.string().describe('The tool requesting permission'),
+            input: z.object({}).passthrough().describe('The input for the tool'),
+          },
+          async ({ tool_name, input }) => {
+            try {
+              if (!this.linePermissionManager) {
+                return {
+                  content: [{ type: 'text' as const, text: JSON.stringify({ behavior: 'deny', message: 'LINE permission manager not initialized' }) }],
+                };
+              }
+
+              const decision = await this.linePermissionManager.requestApproval(tool_name, input, lineContext);
+              return {
+                content: [{ type: 'text' as const, text: JSON.stringify(decision) }],
+              };
+            } catch (error) {
+              return {
+                content: [{ type: 'text' as const, text: JSON.stringify({ behavior: 'deny', message: `Permission error: ${error instanceof Error ? error.message : String(error)}` }) }],
+              };
+            }
+          }
+        );
+
+        const transport = new StreamableHTTPServerTransport({
+          sessionIdGenerator: undefined,
+        });
+
+        res.on('close', () => {
+          transport.close();
+          mcpServer.close();
+        });
+
+        await mcpServer.connect(transport);
+        await transport.handleRequest(req, res, req.body);
+      } catch (error) {
+        console.error('Error handling LINE MCP request:', error);
+        if (!res.headersSent) {
+          res.status(500).json({
+            jsonrpc: '2.0',
+            error: { code: -32603, message: 'Internal server error' },
+            id: null,
+          });
+        }
+      }
+    });
+
+    console.log('LINE routes registered: /line/webhook, /line/mcp');
+  }
+
   async start(): Promise<void> {
     return new Promise((resolve, reject) => {
       this.server = this.app.listen(this.port, (err?: Error) => {
@@ -215,9 +294,10 @@ export class MCPPermissionServer {
   }
 
   async stop(): Promise<void> {
-    // Clean up permission manager first
+    // Clean up permission managers
     this.permissionManager.cleanup();
-    
+    this.linePermissionManager?.cleanup();
+
     if (this.server) {
       return new Promise((resolve) => {
         this.server.close(() => {

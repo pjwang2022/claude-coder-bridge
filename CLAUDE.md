@@ -2,73 +2,119 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Runtime and Package Management
-
-This project uses **Bun** as the JavaScript runtime instead of Node.js. Always use Bun commands:
+## Commands
 
 - `bun install` - Install dependencies
-- `bun run index.ts` - Run the main application
-- `bun --hot ./index.ts` - Run with hot reload for development
-- `bun run test` - Run tests (instead of jest/vitest)
-- `bun build <file>` - Build files (instead of webpack/esbuild)
-
-## Architecture
-
-This is a TypeScript project with strict type checking enabled. The project structure is minimal:
-- `src/index.ts` - Main entry point
-- TypeScript configuration uses modern ES features (ESNext) with bundler module resolution
-
-## Bun-Specific APIs
-
-When adding functionality, prefer Bun's built-in APIs:
-- `Bun.serve()` for HTTP servers with WebSocket support (instead of Express)
-- `bun:sqlite` for SQLite (instead of better-sqlite3)
-- `Bun.redis` for Redis (instead of ioredis)  
-- `Bun.sql` for Postgres (instead of pg)
-- Built-in `WebSocket` (instead of ws library)
-- `Bun.$`command`` for shell commands (instead of execa)
-
-## Frontend Development
-
-If adding frontend features, use HTML imports with `Bun.serve()`:
-- HTML files can directly import .tsx/.jsx/.js files
-- CSS files can be imported directly in components
-- Bun handles transpilation and bundling automatically
-- Use `development: { hmr: true }` for hot module replacement
-
-## Discord Bot Functionality
-
-This bot runs Claude Code sessions on different projects based on Discord channel names:
-
-- Each Discord channel maps to a folder: `BASE_FOLDER/channel-name`
-- Sessions persist per channel with automatic resume using session IDs
-- Only responds to messages from the configured `ALLOWED_USER_ID`
-- Streams Claude Code output and updates Discord messages in real-time
-- Shows the last 3 streamed responses in each message
-- Use `/clear` slash command to reset a session
-
-### Commands
-- Any message in a channel runs Claude Code with that prompt
-- `/clear` - Reset the current session (starts fresh next time)
-
-## Environment Variables
-
-Required environment variables:
-- `DISCORD_TOKEN` - Bot token from Discord Developer Portal
-- `ALLOWED_USER_ID` - Discord user ID who can use the bot
-- `BASE_FOLDER` - Base path where Claude Code operates (e.g., `/Users/tim/repos`)
-
-## Environment
-
-- Bun automatically loads .env files (no need for dotenv)
-- TypeScript is configured with strict mode and modern features
-- No emit compilation (bundler handles this)
+- `bun run test:run` - Run tests (vitest, single run). Never use just `bun test`.
+- `bun start` - Run the application (but see restrictions below)
 
 ## Important Restrictions
 
-- Never run the bot. You are not allowed to use the `bun run src/index.ts` command. 
+- **Never run the bot.** Do not use `bun start` or `bun run src/index.ts`.
 - You can run tests, but never run the main application.
 
-## Testing Notes
+## Runtime
 
-- Use `bun run test:run` to run tests. Never use just `bun test`
+This project uses **Bun** as the JavaScript runtime. Bun automatically loads `.env` files. TypeScript strict mode is enabled with ESNext target and bundler module resolution. When adding functionality, prefer Bun's built-in APIs (e.g., `bun:sqlite` for SQLite).
+
+## Architecture
+
+A Discord + LINE bot that spawns Claude Code CLI processes, with an MCP server for interactive tool permission approvals. Discord uses real-time streaming; LINE uses async task completion with polling.
+
+### Startup Flow (`src/index.ts`)
+
+1. `validateConfig()` - validates environment variables
+2. `MCPPermissionServer.start()` - Express HTTP server on port 3001
+3. `ClaudeManager` + `DiscordBot` created and cross-linked
+4. If LINE env vars set: `LINEClaudeManager` + `LineBotHandler` + `LinePermissionManager` created, LINE routes registered on same Express server
+5. `bot.login()` - connects to Discord
+6. MCP server and bot are connected bidirectionally for reaction handling
+
+### Core Modules
+
+- **`src/bot/client.ts`** (`DiscordBot`) - Discord.js client, routes messages to Claude, handles approval reactions (✅/❌)
+- **`src/bot/commands.ts`** (`CommandHandler`) - Slash command registration (`/clear`)
+- **`src/claude/manager.ts`** (`ClaudeManager`) - Spawns Claude Code CLI as child processes, parses streaming JSON output, updates Discord embeds in real-time. Tracks active processes per channel with race condition prevention.
+- **`src/mcp/server.ts`** (`MCPPermissionServer`) - Express HTTP server exposing `approve_tool` via MCP protocol. Uses `StreamableHTTPServerTransport`.
+- **`src/mcp/permission-manager.ts`** (`PermissionManager`) - Bridges MCP permission requests to Discord messages with reaction-based approval. Handles timeouts and auto-decisions.
+- **`src/mcp/permissions.ts`** - Tool safety classification. Safe tools (Read, Glob, Grep, etc.) auto-approve. Dangerous tools (Bash, Write, Edit) require Discord approval.
+- **`src/db/database.ts`** (`DatabaseManager`) - SQLite session persistence (`bun:sqlite`). Stores channel-to-session mappings with 30-day auto-cleanup.
+- **`src/utils/shell.ts`** - Builds the Claude CLI command string. Creates per-session MCP config files in `/tmp` with Discord context as env vars. Handles shell escaping.
+- **`mcp-bridge.cjs`** - Node.js stdio-to-HTTP bridge. Claude Code spawns this as an MCP server; it forwards JSON-RPC to `localhost:3001` with Discord context headers.
+
+#### LINE Modules (parallel path, does not modify Discord code)
+
+- **`src/claude/process-runner.ts`** - Shared process spawn + JSON stream parser. Callback-based, no platform dependencies. Used by `LINEClaudeManager`.
+- **`src/line/bot.ts`** (`LineBotHandler`) - LINE webhook handler. Validates HMAC signature, routes commands (`/project`, `/result`, `/status`, `/clear`), handles Postback events for approvals. Auto-leaves groups.
+- **`src/line/manager.ts`** (`LINEClaudeManager`) - Spawns Claude Code using process-runner, accumulates tool calls + result, stores in `line_task_results` table. Pushes notification on completion if quota available.
+- **`src/line/permission-manager.ts`** (`LinePermissionManager`) - Sends Flex Message with Approve/Deny Postback buttons. 5-min timeout (auto-deny).
+- **`src/line/messages.ts`** - Flex Message builders for results, approvals, project lists.
+- **`src/line/shell.ts`** - Builds Claude CLI command with LINE MCP config.
+- **`src/line/types.ts`** - LINE-specific type definitions.
+- **`line-mcp-bridge.cjs`** - LINE version of MCP bridge (posts to `/line/mcp` with `X-Line-*` headers).
+
+### Message Flow
+
+```
+Discord message → DiscordBot.handleMessage() → ClaudeManager.runClaudeCode()
+  → spawns: /bin/bash with `claude --output-format stream-json` command
+  → reads streaming JSON (system.init, assistant, user, result message types)
+  → updates Discord embeds in real-time
+```
+
+### Permission Flow
+
+```
+Claude Code needs tool approval → spawns mcp-bridge.cjs (stdio)
+  → HTTP POST to localhost:3001/mcp with Discord context headers
+  → MCPPermissionServer → PermissionManager.requestApproval()
+  → sends Discord embed with ✅/❌ reactions → waits for user reaction
+  → returns allow/deny decision back through the chain
+```
+
+### Channel-to-Folder Mapping
+
+Each Discord channel name maps directly to a folder under `BASE_FOLDER`. Channel `#my-project` operates in `BASE_FOLDER/my-project`. The "general" channel is skipped.
+
+### LINE Message Flow (async)
+
+```
+LINE message → POST /line/webhook → LineBotHandler
+  → validates HMAC signature, auth check (allowlist)
+  → /project, /result, /status, /clear commands handled directly via Reply API (free)
+  → regular text: Reply "Processing..." → LINEClaudeManager.runTask() (background)
+    → spawnClaudeProcess → accumulates results → stores in line_task_results
+    → push notification if quota available
+User sends /result → Reply with Flex Message showing stored result
+```
+
+### LINE Permission Flow
+
+```
+Claude Code needs approval → line-mcp-bridge.cjs → POST /line/mcp
+  → LinePermissionManager → Push Flex Message with Approve/Deny buttons
+  → User taps button → Postback event → handlePostback() → resolve
+  → 5-min timeout → auto-deny
+```
+
+### Session Persistence
+
+Session IDs from Claude Code's `system.init` messages are stored in SQLite. On subsequent messages in the same channel, the session is resumed via `--resume <sessionId>`. LINE uses `line:{userId}:{projectName}` as session keys to avoid collision with Discord channel IDs.
+
+## Environment Variables
+
+Required:
+- `DISCORD_TOKEN` - Bot token
+- `ALLOWED_USER_ID` - Discord user ID authorized to use the bot
+- `BASE_FOLDER` - Base path for channel-to-folder mapping
+
+Optional (Discord):
+- `MCP_SERVER_PORT` - MCP HTTP server port (default: 3001)
+- `MCP_APPROVAL_TIMEOUT` - Seconds to wait for approval reaction (default: 30)
+- `MCP_DEFAULT_ON_TIMEOUT` - Auto-decision on timeout: "allow" or "deny" (default: deny)
+
+Optional (LINE — if not set, LINE bot is skipped):
+- `LINE_CHANNEL_ACCESS_TOKEN` - LINE Bot channel access token
+- `LINE_CHANNEL_SECRET` - LINE Bot channel secret (for webhook HMAC signature)
+- `LINE_ALLOWED_USER_IDS` - Comma-separated LINE user IDs authorized to use the bot
+- `LINE_APPROVAL_TIMEOUT` - Seconds to wait for LINE approval (default: 300)

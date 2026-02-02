@@ -8,7 +8,13 @@
       "Bash(git commit:*)",
       "Bash(git push:*)",
       "Bash(git add:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:line.github.io)",
+      "WebFetch(domain:developers.line.biz)",
+      "WebFetch(domain:www.npmjs.com)",
+      "Bash(npx vitest:*)"
     ],
     "deny": []
   }
