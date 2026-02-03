@@ -254,6 +254,16 @@ async function main() {
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
 
+  // Attach WebUI WebSocket server before starting bots
+  // (some bot .start() calls like Telegram's bot.launch() never resolve)
+  if (webUIServer) {
+    const httpServer = mcpServer.getHttpServer();
+    if (httpServer) {
+      webUIServer.attachToServer(httpServer);
+      console.log(`Web UI available at: http://localhost:${mcpPort}/`);
+    }
+  }
+
   if (bot && config.discord) {
     console.log('Starting Discord Bot...');
     await bot.login(config.discord.token);
@@ -265,23 +275,15 @@ async function main() {
     await slackBot.start();
   }
 
-  if (telegramBot) {
-    console.log('Starting Telegram Bot...');
-    await telegramBot.start();
-  }
-
   if (emailBot) {
     console.log('Starting Email Bot...');
     await emailBot.start();
   }
 
-  // Attach WebUI WebSocket server after HTTP server starts
-  if (webUIServer) {
-    const httpServer = mcpServer.getHttpServer();
-    if (httpServer) {
-      webUIServer.attachToServer(httpServer);
-      console.log(`Web UI available at: http://localhost:${mcpPort}/`);
-    }
+  // Telegram uses long polling — bot.launch() never resolves, so start it last
+  if (telegramBot) {
+    console.log('Starting Telegram Bot...');
+    telegramBot.start();
   }
 
   console.log('All services started successfully!');
