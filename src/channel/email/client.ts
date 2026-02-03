@@ -61,6 +61,11 @@ export class EmailBot {
   async start(): Promise<void> {
     this.running = true;
 
+    // Prevent unhandled 'error' events from crashing the process
+    this.imap.on('error', (err: Error) => {
+      console.error('Email bot: IMAP error event:', err.message);
+    });
+
     await this.imap.connect();
     console.log('Email bot: IMAP connected.');
 
@@ -81,27 +86,48 @@ export class EmailBot {
   }
 
   private async listenLoop(): Promise<void> {
-    const lock = await this.imap.getMailboxLock('INBOX');
-
-    try {
-      // Process any existing unseen messages first
-      await this.processUnseenMessages();
-
-      // IDLE loop: wait for new messages
-      while (this.running) {
-        try {
-          await this.imap.idle();
-        } catch (err) {
-          if (!this.running) break;
-          console.error('Email bot: IDLE error, reconnecting:', err);
-          await this.sleep(5000);
-          continue;
+    while (this.running) {
+      let lock;
+      try {
+        // Ensure connected
+        if (!this.imap.usable) {
+          console.log('Email bot: Reconnecting IMAP...');
+          try { await this.imap.connect(); } catch (err) {
+            console.error('Email bot: Reconnect failed:', (err as Error).message);
+            await this.sleep(10000);
+            continue;
+          }
+          console.log('Email bot: IMAP reconnected.');
         }
 
+        lock = await this.imap.getMailboxLock('INBOX');
+
+        // Process any existing unseen messages first
         await this.processUnseenMessages();
+
+        // IDLE loop: wait for new messages
+        while (this.running) {
+          try {
+            await this.imap.idle();
+          } catch (err) {
+            if (!this.running) break;
+            console.error('Email bot: IDLE error:', (err as Error).message);
+            break; // break inner loop to reconnect
+          }
+
+          await this.processUnseenMessages();
+        }
+      } catch (err) {
+        if (!this.running) break;
+        console.error('Email bot: Listen loop error, will retry:', (err as Error).message);
+      } finally {
+        try { lock?.release(); } catch { /* ignore */ }
       }
-    } finally {
-      lock.release();
+
+      if (this.running) {
+        console.log('Email bot: Waiting 10s before reconnect...');
+        await this.sleep(10000);
+      }
     }
   }
 

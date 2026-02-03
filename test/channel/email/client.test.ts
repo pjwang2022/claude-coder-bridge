@@ -8,6 +8,8 @@ vi.mock('imapflow', () => ({
     idle: vi.fn().mockResolvedValue(undefined),
     fetch: vi.fn().mockReturnValue([]),
     messageFlagsAdd: vi.fn().mockResolvedValue(undefined),
+    on: vi.fn(),
+    usable: true,
   })),
 }));
 
