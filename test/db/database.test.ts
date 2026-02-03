@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
-// Mock bun:sqlite
+// Mock better-sqlite3
 const mockQuery = vi.fn();
 const mockExec = vi.fn();
 const mockClose = vi.fn();
@@ -8,10 +8,10 @@ const mockGet = vi.fn();
 const mockRun = vi.fn();
 const mockAll = vi.fn();
 
-vi.mock("bun:sqlite", () => ({
-  Database: vi.fn().mockImplementation(() => ({
+vi.mock("better-sqlite3", () => ({
+  default: vi.fn().mockImplementation(() => ({
     exec: mockExec,
-    query: vi.fn(() => ({
+    prepare: vi.fn(() => ({
       get: mockGet,
       run: mockRun,
       all: mockAll

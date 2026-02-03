@@ -1,0 +1,1235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claude Code Web UI</title>
+<style>
+  :root {
+    --bg: #1a1a2e;
+    --bg2: #16213e;
+    --bg3: #0f3460;
+    --fg: #e4e4e7;
+    --fg2: #a1a1aa;
+    --accent: #7c3aed;
+    --accent2: #a78bfa;
+    --green: #22c55e;
+    --red: #ef4444;
+    --yellow: #eab308;
+    --border: #27273a;
+    --code-bg: #0d1117;
+    --radius: 8px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace;
+    background: var(--bg);
+    color: var(--fg);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Header */
+  #header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+  }
+  #header h1 { font-size: 15px; font-weight: 600; }
+  #status-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--red);
+    display: inline-block;
+    margin-right: 8px;
+    transition: background 0.3s;
+  }
+  #status-dot.connected { background: var(--green); }
+  .header-right { display: flex; align-items: center; gap: 10px; position: relative; }
+  #project-name { font-size: 13px; color: var(--fg2); margin-left: 12px; }
+  .btn {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    padding: 5px 12px;
+    border-radius: var(--radius);
+    font-size: 12px;
+    cursor: pointer;
+    transition: opacity 0.2s;
+  }
+  .btn:hover { opacity: 0.85; }
+  .btn-danger { background: var(--red); }
+  .btn-sm { padding: 4px 10px; font-size: 11px; }
+
+  /* Overlays (auth + project selection) */
+  .overlay {
+    position: fixed; inset: 0;
+    background: var(--bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+  }
+  .overlay.hidden { display: none; }
+  .overlay-box {
+    background: var(--bg2);
+    padding: 40px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    text-align: center;
+    max-width: 420px;
+    width: 90%;
+  }
+  .overlay-box h2 { margin-bottom: 20px; font-size: 20px; }
+  .overlay-box input {
+    width: 100%;
+    padding: 10px 14px;
+    background: var(--bg);
+    color: var(--fg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 14px;
+    margin-bottom: 16px;
+  }
+  #auth-error { color: var(--red); font-size: 13px; margin-bottom: 12px; display: none; }
+
+  /* Project list in overlay */
+  .project-list {
+    max-height: 300px;
+    overflow-y: auto;
+    margin-bottom: 16px;
+    text-align: left;
+  }
+  .project-item {
+    padding: 10px 14px;
+    cursor: pointer;
+    border-radius: var(--radius);
+    font-size: 14px;
+    transition: background 0.15s;
+  }
+  .project-item:hover { background: var(--bg3); }
+  .project-create-row {
+    display: flex; gap: 8px;
+  }
+  .project-create-row input { margin-bottom: 0; flex: 1; }
+
+  /* Tab bar */
+  #tab-bar {
+    display: none;
+    align-items: stretch;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    min-height: 36px;
+  }
+  #tab-bar.visible { display: flex; }
+  #tabs-scroll {
+    display: flex;
+    overflow-x: auto;
+    flex: 1;
+    scrollbar-width: none;
+  }
+  #tabs-scroll::-webkit-scrollbar { display: none; }
+  .tab {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    cursor: pointer;
+    border-right: 1px solid var(--border);
+    white-space: nowrap;
+    font-size: 13px;
+    color: var(--fg2);
+    transition: background 0.15s;
+    user-select: none;
+    flex-shrink: 0;
+  }
+  .tab:hover { background: var(--bg3); }
+  .tab.active { color: var(--fg); background: var(--bg); border-bottom: 2px solid var(--accent); }
+  .tab .tab-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    display: none;
+    flex-shrink: 0;
+  }
+  .tab.running .tab-dot {
+    display: inline-block;
+    background: var(--green);
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+  .tab.has-update .tab-dot {
+    display: inline-block;
+    background: var(--accent2);
+  }
+  .tab .tab-label { cursor: pointer; }
+  .tab .tab-rename {
+    background: var(--bg);
+    color: var(--fg);
+    border: 1px solid var(--accent);
+    border-radius: 3px;
+    font-size: 13px;
+    font-family: inherit;
+    padding: 0 4px;
+    width: 120px;
+    outline: none;
+  }
+  .tab .tab-close {
+    font-size: 13px;
+    opacity: 0;
+    cursor: pointer;
+    margin-left: 2px;
+    line-height: 1;
+  }
+  .tab:hover .tab-close { opacity: 0.5; }
+  .tab .tab-close:hover { opacity: 1; color: var(--red); }
+  .tab-action {
+    background: transparent;
+    border: none;
+    color: var(--fg2);
+    padding: 6px 10px;
+    cursor: pointer;
+    font-size: 16px;
+    flex-shrink: 0;
+    transition: background 0.15s;
+    position: relative;
+  }
+  .tab-action:hover { background: var(--bg3); color: var(--fg); }
+
+  /* Session history dropdown */
+  #history-dropdown {
+    display: none;
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 4px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    min-width: 220px;
+    max-height: 340px;
+    overflow-y: auto;
+    z-index: 50;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  }
+  #history-dropdown.open { display: block; }
+  .history-item {
+    padding: 8px 14px;
+    font-size: 13px;
+    cursor: pointer;
+    color: var(--fg2);
+    transition: background 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .history-item:hover { background: var(--bg3); color: var(--fg); }
+  .history-item.is-open { color: var(--fg); }
+  .history-item .history-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent); flex-shrink: 0;
+  }
+  .history-item .history-date { font-size: 10px; color: var(--fg2); white-space: nowrap; }
+  .history-empty {
+    padding: 12px 14px;
+    font-size: 12px;
+    color: var(--fg2);
+    text-align: center;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* Panes */
+  #panes {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+  }
+  .pane {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-width: 0;
+  }
+  .pane-content {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .session-chat {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .pane-empty {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--fg2);
+    font-size: 13px;
+  }
+  .pane-attachments {
+    display: none;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 4px 12px;
+    background: var(--bg2);
+    border-top: 1px solid var(--border);
+  }
+  .pane-input {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: var(--bg2);
+    border-top: 1px solid var(--border);
+  }
+  .pane-input textarea {
+    flex: 1;
+    background: var(--bg);
+    color: var(--fg);
+    border: 1px solid var(--border);
+    padding: 8px 12px;
+    border-radius: var(--radius);
+    font-size: 13px;
+    font-family: inherit;
+    resize: none;
+    min-height: 36px;
+    max-height: 100px;
+  }
+  .pane-input textarea:focus { outline: none; border-color: var(--accent); }
+
+  /* Messages */
+  .msg {
+    max-width: 90%;
+    padding: 10px 14px;
+    border-radius: var(--radius);
+    font-size: 13px;
+    line-height: 1.5;
+    word-wrap: break-word;
+    white-space: pre-wrap;
+  }
+  .msg-user { background: var(--accent); align-self: flex-end; color: #fff; }
+  .msg-assistant { background: var(--bg2); border: 1px solid var(--border); align-self: flex-start; }
+  .msg-system { background: var(--bg3); border: 1px solid var(--border); align-self: center; font-size: 11px; color: var(--fg2); }
+  .msg-tool {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    align-self: flex-start;
+    font-size: 12px;
+    padding: 8px 12px;
+    max-width: 95%;
+  }
+  .msg-tool .tool-header { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
+  .msg-tool .tool-name { color: var(--accent2); font-weight: 600; font-size: 12px; }
+  .msg-tool .tool-status { display: inline-block; flex-shrink: 0; }
+  .msg-tool .tool-desc { color: var(--fg2); font-size: 11px; margin-bottom: 3px; }
+  .msg-tool .tool-code {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 6px 8px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 11px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    margin-top: 3px;
+    color: var(--fg);
+  }
+  .msg-tool .tool-meta { color: var(--fg2); font-size: 10px; margin-top: 3px; }
+  .msg-result {
+    align-self: flex-start;
+    padding: 10px 14px;
+    border-radius: var(--radius);
+    border: 1px solid;
+  }
+  .msg-result.success { background: rgba(34, 197, 94, 0.1); border-color: var(--green); }
+  .msg-result.error { background: rgba(239, 68, 68, 0.1); border-color: var(--red); }
+  .msg-result .result-header { font-weight: 600; margin-bottom: 4px; font-size: 12px; }
+  .msg-result .result-meta { font-size: 10px; color: var(--fg2); margin-top: 4px; }
+
+  /* Approval modal */
+  #approval-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.6);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+  }
+  #approval-overlay.active { display: flex; }
+  #approval-box {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    max-width: 600px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+  }
+  #approval-box h3 { margin-bottom: 12px; font-size: 16px; }
+  #approval-tool-name { color: var(--accent2); font-weight: 600; }
+  #approval-input { margin: 12px 0; max-height: 400px; overflow-y: auto; }
+  .approval-field { margin-bottom: 8px; }
+  .approval-field-label { font-size: 11px; color: var(--fg2); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+  .approval-field-value {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 13px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    color: var(--fg);
+    max-height: 200px;
+    overflow-y: auto;
+  }
+  .approval-actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 16px; }
+  .btn-approve { background: var(--green); }
+  .btn-deny { background: var(--red); }
+
+  /* Button icons */
+  .btn-icon {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--fg2);
+    width: 34px; height: 34px;
+    border-radius: var(--radius);
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: background 0.2s, color 0.2s;
+    padding: 0;
+  }
+  .btn-icon:hover { background: var(--bg3); color: var(--fg); }
+  .btn-icon.recording { background: var(--red); color: #fff; border-color: var(--red); animation: pulse 1.2s ease-in-out infinite; }
+
+  .attachment-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--bg3);
+    color: var(--fg2);
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+  }
+  .chip-remove { cursor: pointer; color: var(--red); font-weight: bold; margin-left: 2px; }
+  .chip-remove:hover { color: #fff; }
+</style>
+</head>
+<body>
+
+<!-- Auth Overlay -->
+<div id="auth-overlay" class="overlay hidden">
+  <div class="overlay-box">
+    <h2>Claude Code Web UI</h2>
+    <p id="auth-error"></p>
+    <input type="password" id="auth-password" placeholder="Enter password" autocomplete="off">
+    <button class="btn" onclick="submitAuth()" style="width:100%">Connect</button>
+  </div>
+</div>
+
+<!-- Project Selection Overlay -->
+<div id="project-overlay" class="overlay hidden">
+  <div class="overlay-box">
+    <h2>Select Project</h2>
+    <div class="project-list" id="project-list"></div>
+    <div class="project-create-row">
+      <input type="text" id="new-project-name" placeholder="New project name..." autocomplete="off">
+      <button class="btn" onclick="createAndSelectProject()">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- Approval Modal -->
+<div id="approval-overlay">
+  <div id="approval-box">
+    <h3>Tool Approval Required</h3>
+    <p>Claude wants to use: <span id="approval-tool-name"></span></p>
+    <div id="approval-input"></div>
+    <div class="approval-actions">
+      <button class="btn btn-deny" onclick="respondApproval(false)">Deny</button>
+      <button class="btn btn-approve" onclick="respondApproval(true)">Approve</button>
+    </div>
+  </div>
+</div>
+
+<!-- Header -->
+<div id="header">
+  <div style="display:flex;align-items:center">
+    <span id="status-dot"></span>
+    <h1>Claude Code</h1>
+    <span id="project-name"></span>
+  </div>
+  <div class="header-right">
+    <button class="btn btn-sm" onclick="toggleHistoryDropdown(event)">History</button>
+    <div id="history-dropdown"></div>
+  </div>
+</div>
+
+<!-- Tab Bar -->
+<div id="tab-bar">
+  <div id="tabs-scroll"></div>
+  <button class="tab-action" onclick="addSession()" title="New session">+</button>
+</div>
+
+<!-- Panes -->
+<div id="panes">
+  <div class="pane" id="main-pane">
+    <div class="pane-content" id="main-content">
+      <div class="pane-empty">Select a project to start</div>
+    </div>
+    <div class="pane-attachments" id="main-attach"></div>
+    <div class="pane-input" id="main-input">
+      <input type="file" class="file-input" multiple accept="image/*,audio/*,.txt,.md,.json,.csv,.ts,.js,.py,.yaml,.yml" style="display:none" onchange="handleFileSelect(event)">
+      <button class="btn-icon" onclick="this.previousElementSibling.click()" title="Attach files">&#128206;</button>
+      <button class="btn-icon mic-btn" onclick="toggleRecording()" title="Record voice">&#127908;</button>
+      <textarea rows="1" placeholder="Type a prompt..." onkeydown="handleKeyDown(event)" oninput="autoResize(this)"></textarea>
+      <button class="btn" onclick="sendPrompt()">Send</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // --- State ---
+  let ws = null;
+  let currentProject = '';
+  let currentSession = null;
+  let sessionCounter = 0;
+  let pendingApprovalId = null;
+  let pendingFiles = [];
+  let mediaRecorder = null;
+  let audioChunks = [];
+  let isRecording = false;
+
+  // Per-session state (open tabs): name -> { displayName, chatEl, toolElements, oldestLoadedId, hasMore, isLoading, isRunning }
+  const sessions = new Map();
+  // Full server session list (includes closed tabs)
+  let allServerSessions = [];
+  // Map session key -> displayName (kept in sync with server)
+  const displayNames = new Map();
+
+  // --- WebSocket ---
+  function connect() {
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    ws = new WebSocket(`${proto}//${location.host}/ws`);
+    ws.onopen = () => {
+      document.getElementById('status-dot').classList.add('connected');
+    };
+    ws.onclose = () => {
+      document.getElementById('status-dot').classList.remove('connected');
+      setTimeout(connect, 2000);
+    };
+    ws.onerror = () => {};
+    ws.onmessage = (event) => {
+      try { handleServerMessage(JSON.parse(event.data)); } catch {}
+    };
+  }
+
+  let projectsList = [];
+
+  function handleServerMessage(msg) {
+    const sn = msg.sessionName;
+    switch (msg.type) {
+      case 'auth_required':
+        document.getElementById('auth-overlay').classList.remove('hidden');
+        break;
+      case 'auth_result':
+        if (msg.success) {
+          document.getElementById('auth-overlay').classList.add('hidden');
+          if (currentProject) {
+            // Reconnection: already have a project, reload sessions
+            loadSessions();
+          } else {
+            // First connection: show project selection
+            document.getElementById('project-overlay').classList.remove('hidden');
+          }
+        } else {
+          const el = document.getElementById('auth-error');
+          el.textContent = msg.message || 'Authentication failed';
+          el.style.display = 'block';
+        }
+        break;
+      case 'projects':
+        projectsList = msg.list;
+        // If project overlay is visible, populate it
+        if (!document.getElementById('project-overlay').classList.contains('hidden')) {
+          renderProjectList(msg.list);
+        }
+        break;
+      case 'sessions':
+        onSessionsList(msg.list);
+        break;
+      case 'system_init':
+        if (sn) {
+          addMsgToSession(sn, 'system', `Started | ${msg.cwd} | ${msg.model}`);
+          markRunning(sn, true);
+        }
+        break;
+      case 'assistant_message':
+        if (sn) {
+          if (msg.text && msg.text.trim()) addMsgToSession(sn, 'assistant', msg.text);
+          if (msg.toolCalls) for (const t of msg.toolCalls) addToolToSession(sn, t);
+          markUpdate(sn);
+        }
+        break;
+      case 'tool_result':
+        if (sn) updateToolInSession(sn, msg.toolId, msg.result, msg.isError);
+        break;
+      case 'result':
+        if (sn) {
+          addResultToSession(sn, msg.status, msg.turns, msg.cost);
+          markRunning(sn, false);
+        }
+        break;
+      case 'error':
+        if (sn) {
+          addMsgToSession(sn, 'system', 'Error: ' + msg.message);
+          markRunning(sn, false);
+        } else if (currentSession) {
+          addMsgToSession(currentSession, 'system', 'Error: ' + msg.message);
+        }
+        break;
+      case 'busy':
+        if (sn) addMsgToSession(sn, 'system', msg.message);
+        break;
+      case 'approval_request':
+        showApproval(msg.requestId, msg.toolName, msg.input);
+        break;
+      case 'chat_history':
+        if (sn) renderHistory(sn, msg.messages, msg.hasMore);
+        break;
+      case 'session_cleared':
+        if (sn) addMsgToSession(sn, 'system', 'Session cleared');
+        break;
+    }
+  }
+
+  // --- Auth ---
+  function submitAuth() {
+    const pwd = document.getElementById('auth-password').value;
+    if (ws) ws.send(JSON.stringify({ type: 'auth', password: pwd }));
+  }
+  document.getElementById('auth-password')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') submitAuth();
+  });
+
+  // --- Project selection overlay ---
+  function renderProjectList(projects) {
+    const container = document.getElementById('project-list');
+    if (projects.length === 0) {
+      container.innerHTML = '<div style="color:var(--fg2);font-size:13px;padding:10px">No projects yet. Create one below.</div>';
+      return;
+    }
+    container.innerHTML = projects.map(p =>
+      '<div class="project-item" onclick="selectProject(\'' + esc(p) + '\')">' + esc(p) + '</div>'
+    ).join('');
+  }
+
+  function selectProject(name) {
+    currentProject = name;
+    document.getElementById('project-name').textContent = name;
+    document.getElementById('project-overlay').classList.add('hidden');
+    document.getElementById('tab-bar').classList.add('visible');
+    sessions.clear();
+    allServerSessions = [];
+    currentSession = null;
+    sessionCounter = 0;
+    loadSessions();
+  }
+
+  function createAndSelectProject() {
+    const input = document.getElementById('new-project-name');
+    const name = input.value.trim();
+    if (!name || !ws) return;
+    if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
+      alert('Use only letters, numbers, hyphens, and underscores.');
+      return;
+    }
+    ws.send(JSON.stringify({ type: 'create_project', name }));
+    input.value = '';
+    // Select it immediately
+    selectProject(name);
+  }
+  document.getElementById('new-project-name')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') createAndSelectProject();
+  });
+
+  // --- Sessions ---
+  function getOrCreate(name) {
+    if (!sessions.has(name)) {
+      const chatEl = document.createElement('div');
+      chatEl.className = 'session-chat';
+      chatEl.addEventListener('scroll', function() {
+        const s = sessions.get(name);
+        if (this.scrollTop < 50 && s && s.hasMore && !s.isLoading) {
+          loadHistory(name);
+        }
+      });
+      sessions.set(name, {
+        name,
+        chatEl,
+        toolElements: new Map(),
+        oldestLoadedId: null,
+        hasMore: false,
+        isLoading: false,
+        isRunning: false,
+      });
+    }
+    return sessions.get(name);
+  }
+
+  function loadSessions() {
+    if (!currentProject || !ws) return;
+    ws.send(JSON.stringify({ type: 'list_sessions', project: currentProject }));
+  }
+
+  function onSessionsList(list) {
+    document.getElementById('tab-bar').classList.add('visible');
+    allServerSessions = list;
+
+    if (list.length === 0) {
+      addSession();
+      return;
+    }
+
+    // Sync display names from server
+    for (const s of list) {
+      displayNames.set(s.name, s.displayName || s.name);
+    }
+
+    // Update counter to be above max existing numeric name
+    for (const s of list) {
+      const n = parseInt(s.name);
+      if (!isNaN(n) && n >= sessionCounter) sessionCounter = n + 1;
+    }
+
+    // On initial load (no tabs open yet), open the most recently used session
+    if (sessions.size === 0) {
+      const sorted = [...list].sort((a, b) => (b.lastUsed || 0) - (a.lastUsed || 0));
+      const first = sorted[0];
+      getOrCreate(first.name);
+      showSession(first.name);
+      loadHistory(first.name);
+    }
+
+    // Refresh history dropdown if open
+    if (document.getElementById('history-dropdown')?.classList.contains('open')) {
+      renderHistoryDropdown();
+    }
+
+    updateTabs();
+  }
+
+  function addSession() {
+    if (!currentProject || !ws) return;
+    sessionCounter++;
+    const name = String(sessionCounter);
+    ws.send(JSON.stringify({ type: 'create_session', project: currentProject, sessionName: name }));
+    getOrCreate(name);
+    showSession(name);
+    loadHistory(name);
+    updateTabs();
+  }
+
+  function closeSession(name, e) {
+    if (e) e.stopPropagation();
+    if (sessions.size <= 1) return; // keep at least one
+
+    // Just hide from tab bar - session stays on server
+    const s = sessions.get(name);
+    if (s && s.chatEl.parentNode) s.chatEl.parentNode.removeChild(s.chatEl);
+    sessions.delete(name);
+
+    if (currentSession === name) {
+      const first = sessions.keys().next().value;
+      if (first) {
+        showSession(first);
+      } else {
+        currentSession = null;
+        showEmpty();
+      }
+    }
+    updateTabs();
+  }
+
+  // --- Session history dropdown (header) ---
+  function toggleHistoryDropdown(e) {
+    e.stopPropagation();
+    const dd = document.getElementById('history-dropdown');
+    if (dd.classList.contains('open')) {
+      dd.classList.remove('open');
+      return;
+    }
+    if (ws && currentProject) {
+      ws.send(JSON.stringify({ type: 'list_sessions', project: currentProject }));
+    }
+    renderHistoryDropdown();
+    dd.classList.add('open');
+
+    const close = (ev) => {
+      if (!dd.contains(ev.target)) {
+        dd.classList.remove('open');
+        document.removeEventListener('click', close);
+      }
+    };
+    setTimeout(() => document.addEventListener('click', close), 0);
+  }
+
+  function renderHistoryDropdown() {
+    const dd = document.getElementById('history-dropdown');
+    if (allServerSessions.length === 0) {
+      dd.innerHTML = '<div class="history-empty">No sessions yet</div>';
+      return;
+    }
+    const sorted = [...allServerSessions].sort((a, b) => (b.lastUsed || 0) - (a.lastUsed || 0));
+    dd.innerHTML = sorted.map(s => {
+      const isOpen = sessions.has(s.name);
+      const label = s.displayName || s.name;
+      const date = s.lastUsed ? new Date(s.lastUsed).toLocaleDateString() : '';
+      return '<div class="history-item' + (isOpen ? ' is-open' : '') + '" onclick="openFromHistory(\'' + esc(s.name) + '\')">' +
+        (isOpen ? '<span class="history-dot"></span>' : '') +
+        '<span>' + esc(label) + '</span>' +
+        (date ? '<span class="history-date">' + esc(date) + '</span>' : '') +
+        '</div>';
+    }).join('');
+  }
+
+  function openFromHistory(name) {
+    document.getElementById('history-dropdown').classList.remove('open');
+    if (sessions.has(name)) {
+      // Already open as tab — just switch to it
+      showSession(name);
+    } else {
+      getOrCreate(name);
+      showSession(name);
+      loadHistory(name);
+    }
+    updateTabs();
+  }
+
+  function switchTab(name) {
+    showSession(name);
+    updateTabs();
+  }
+
+  function showSession(name) {
+    const content = document.getElementById('main-content');
+    const s = getOrCreate(name);
+    while (content.firstChild) content.removeChild(content.firstChild);
+    content.appendChild(s.chatEl);
+    currentSession = name;
+    s.chatEl.scrollTop = s.chatEl.scrollHeight;
+    updateTabs();
+  }
+
+  function showEmpty() {
+    const content = document.getElementById('main-content');
+    while (content.firstChild) content.removeChild(content.firstChild);
+    const empty = document.createElement('div');
+    empty.className = 'pane-empty';
+    empty.textContent = 'Select a project to start';
+    content.appendChild(empty);
+    currentSession = null;
+  }
+
+  // Track clicks for manual double-click detection (native dblclick breaks when DOM rebuilds)
+  let lastTabClick = { name: null, time: 0 };
+
+  function updateTabs() {
+    const container = document.getElementById('tabs-scroll');
+    container.innerHTML = '';
+    for (const [name, s] of sessions) {
+      const label = displayNames.get(name) || name;
+      const tab = document.createElement('div');
+      tab.className = 'tab';
+      if (currentSession === name) tab.classList.add('active');
+      if (s.isRunning) tab.classList.add('running');
+
+      const dot = document.createElement('span');
+      dot.className = 'tab-dot';
+
+      const labelEl = document.createElement('span');
+      labelEl.className = 'tab-label';
+      labelEl.textContent = label;
+
+      const closeEl = document.createElement('span');
+      closeEl.className = 'tab-close';
+      closeEl.innerHTML = '&times;';
+      closeEl.onclick = (e) => closeSession(name, e);
+
+      tab.appendChild(dot);
+      tab.appendChild(labelEl);
+      tab.appendChild(closeEl);
+
+      tab.onclick = (e) => {
+        if (e.target.closest('.tab-close')) return;
+        const now = Date.now();
+        if (lastTabClick.name === name && now - lastTabClick.time < 400) {
+          // Double click detected — start rename
+          lastTabClick = { name: null, time: 0 };
+          startRename(name, tab.querySelector('.tab-label'));
+          return;
+        }
+        lastTabClick = { name, time: now };
+        switchTab(name);
+      };
+
+      container.appendChild(tab);
+    }
+  }
+
+  function startRename(name, labelEl) {
+    if (!labelEl) return;
+    const current = displayNames.get(name) || name;
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'tab-rename';
+    input.value = current;
+    labelEl.replaceWith(input);
+    input.focus();
+    input.select();
+
+    const commit = () => {
+      const val = input.value.trim();
+      if (val && val !== current && ws && currentProject) {
+        displayNames.set(name, val);
+        ws.send(JSON.stringify({ type: 'rename_session', project: currentProject, sessionName: name, displayName: val }));
+      }
+      updateTabs();
+    };
+
+    input.addEventListener('blur', commit);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+      if (e.key === 'Escape') { input.removeEventListener('blur', commit); updateTabs(); }
+    });
+  }
+
+  function markRunning(name, running) {
+    // If a hidden session starts running, re-open its tab
+    if (running && !sessions.has(name)) {
+      getOrCreate(name);
+    }
+    const s = sessions.get(name);
+    if (s) s.isRunning = running;
+    updateTabs();
+  }
+
+  function markUpdate(name) {
+    updateTabs();
+  }
+
+  // --- Chat messages ---
+  function addMsgToSession(name, type, text) {
+    const s = getOrCreate(name);
+    const div = document.createElement('div');
+    div.className = 'msg msg-' + type;
+    div.textContent = text;
+    s.chatEl.appendChild(div);
+    autoScrollIfNeeded(s);
+  }
+
+  function formatToolCall(tool) {
+    const name = tool.name || '';
+    const input = tool.input || {};
+    let desc = '', code = '', meta = '';
+    if (name === 'Bash') { desc = input.description || ''; code = input.command || ''; }
+    else if (name === 'Read') { code = input.file_path || ''; if (input.offset || input.limit) meta = 'lines ' + (input.offset||0) + '-' + ((input.offset||0)+(input.limit||'?')); }
+    else if (name === 'Write') { code = input.file_path || ''; }
+    else if (name === 'Edit') { code = input.file_path || ''; if (input.old_string) meta = 'replacing ' + input.old_string.split('\n').length + ' line(s)'; }
+    else if (name === 'Glob') { code = input.pattern || ''; if (input.path) meta = 'in ' + input.path; }
+    else if (name === 'Grep') { code = input.pattern || ''; if (input.path) meta = 'in ' + input.path; if (input.glob) meta += ' (' + input.glob + ')'; }
+    else if (name === 'WebFetch') { code = input.url || ''; }
+    else if (name === 'Task') { desc = input.description || ''; code = input.prompt ? (input.prompt.length > 200 ? input.prompt.substring(0, 200) + '...' : input.prompt) : ''; }
+    else { for (const [k,v] of Object.entries(input)) { const sv = String(v); if (sv.length > 0) { if (!code) code = sv.length > 300 ? sv.substring(0,300) + '...' : sv; else if (!meta) meta = k + ': ' + (sv.length > 80 ? sv.substring(0,80) + '...' : sv); } } }
+    return { desc, code, meta };
+  }
+
+  function addToolToSession(name, tool) {
+    const s = getOrCreate(name);
+    const div = document.createElement('div');
+    div.className = 'msg msg-tool';
+    const { desc, code, meta } = formatToolCall(tool);
+    let html = '<div class="tool-header"><span class="tool-status">&#9203;</span> <span class="tool-name">' + esc(tool.name) + '</span></div>';
+    if (desc) html += '<div class="tool-desc">' + esc(desc) + '</div>';
+    if (code) html += '<div class="tool-code">' + esc(code) + '</div>';
+    if (meta) html += '<div class="tool-meta">' + esc(meta) + '</div>';
+    div.innerHTML = html;
+    s.chatEl.appendChild(div);
+    s.toolElements.set(tool.id, div);
+    autoScrollIfNeeded(s);
+  }
+
+  function updateToolInSession(name, toolId, result, isError) {
+    const s = sessions.get(name);
+    if (!s) return;
+    const div = s.toolElements.get(toolId);
+    if (div) {
+      const st = div.querySelector('.tool-status');
+      if (st) st.textContent = isError ? '\u274C' : '\u2705';
+      if (result) {
+        const r = document.createElement('div');
+        r.style.cssText = 'margin-top:3px;color:var(--fg2);font-size:10px;';
+        r.textContent = result;
+        div.appendChild(r);
+      }
+    }
+  }
+
+  function addResultToSession(name, status, turns, cost) {
+    const s = getOrCreate(name);
+    const div = document.createElement('div');
+    div.className = 'msg msg-result ' + (status === 'success' ? 'success' : 'error');
+    const header = status === 'success' ? 'Complete' : 'Failed';
+    let meta = '';
+    if (turns) meta += turns + ' turns';
+    if (cost) meta += (meta ? ' | ' : '') + '$' + cost.toFixed(4);
+    div.innerHTML = '<div class="result-header">' + esc(header) + '</div>' + (meta ? '<div class="result-meta">' + esc(meta) + '</div>' : '');
+    s.chatEl.appendChild(div);
+    autoScrollIfNeeded(s);
+  }
+
+  function autoScrollIfNeeded(s) {
+    const el = s.chatEl;
+    // Auto-scroll if near bottom (within 100px)
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 100) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }
+
+  // --- History ---
+  function loadHistory(name) {
+    const s = sessions.get(name);
+    if (!s || !currentProject || !ws || s.isLoading) return;
+    s.isLoading = true;
+    const payload = { type: 'load_history', project: currentProject, sessionName: name, limit: 15 };
+    if (s.oldestLoadedId) payload.beforeId = s.oldestLoadedId;
+    ws.send(JSON.stringify(payload));
+  }
+
+  function renderHistory(name, messages, hasMore) {
+    const s = sessions.get(name);
+    if (!s) return;
+    s.isLoading = false;
+    s.hasMore = hasMore;
+    if (messages.length === 0) return;
+
+    const chatEl = s.chatEl;
+    const prevH = chatEl.scrollHeight;
+    const isInitial = !s.oldestLoadedId;
+    const frag = document.createDocumentFragment();
+
+    for (const m of messages) {
+      if (!s.oldestLoadedId || m.id < s.oldestLoadedId) s.oldestLoadedId = m.id;
+      const el = renderHistMsg(m);
+      if (el) frag.appendChild(el);
+    }
+
+    if (chatEl.firstChild) chatEl.insertBefore(frag, chatEl.firstChild);
+    else chatEl.appendChild(frag);
+
+    if (isInitial) chatEl.scrollTop = chatEl.scrollHeight;
+    else chatEl.scrollTop = chatEl.scrollHeight - prevH;
+  }
+
+  function renderHistMsg(m) {
+    switch (m.role) {
+      case 'user': return mkMsg('user', m.content);
+      case 'assistant': return mkMsg('assistant', m.content);
+      case 'system': return mkMsg('system', m.content);
+      case 'tool_call': {
+        try {
+          const tool = JSON.parse(m.content);
+          const div = document.createElement('div');
+          div.className = 'msg msg-tool';
+          const { desc, code, meta } = formatToolCall(tool);
+          let html = '<div class="tool-header"><span class="tool-status">\u2705</span> <span class="tool-name">' + esc(tool.name) + '</span></div>';
+          if (desc) html += '<div class="tool-desc">' + esc(desc) + '</div>';
+          if (code) html += '<div class="tool-code">' + esc(code) + '</div>';
+          if (meta) html += '<div class="tool-meta">' + esc(meta) + '</div>';
+          div.innerHTML = html;
+          return div;
+        } catch { return null; }
+      }
+      case 'tool_result': return null;
+      case 'result': {
+        try {
+          const d = JSON.parse(m.content);
+          const div = document.createElement('div');
+          div.className = 'msg msg-result ' + (d.status === 'success' ? 'success' : 'error');
+          const header = d.status === 'success' ? 'Complete' : 'Failed';
+          let meta = '';
+          if (d.turns) meta += d.turns + ' turns';
+          if (d.cost) meta += (meta ? ' | ' : '') + '$' + d.cost.toFixed(4);
+          div.innerHTML = '<div class="result-header">' + esc(header) + '</div>' + (meta ? '<div class="result-meta">' + esc(meta) + '</div>' : '');
+          return div;
+        } catch { return null; }
+      }
+      default: return mkMsg('system', m.content);
+    }
+  }
+
+  function mkMsg(type, text) {
+    const div = document.createElement('div');
+    div.className = 'msg msg-' + type;
+    div.textContent = text;
+    return div;
+  }
+
+  // --- Input ---
+  function sendPrompt() {
+    if (!currentSession || !currentProject || !ws) return;
+
+    const ta = document.querySelector('#main-input textarea');
+    const text = ta.value.trim();
+    if (!text && pendingFiles.length === 0) return;
+
+    if (text) addMsgToSession(currentSession, 'user', text);
+    if (pendingFiles.length > 0) addMsgToSession(currentSession, 'system', pendingFiles.length + ' file(s) attached');
+
+    const payload = { type: 'prompt', project: currentProject, sessionName: currentSession, text };
+    if (pendingFiles.length > 0) payload.files = pendingFiles;
+    ws.send(JSON.stringify(payload));
+
+    ta.value = '';
+    ta.style.height = 'auto';
+    pendingFiles = [];
+    updateAttach();
+    markRunning(currentSession, true);
+  }
+
+  function handleKeyDown(e) {
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+      e.preventDefault();
+      sendPrompt();
+    }
+  }
+
+  function autoResize(el) {
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 100) + 'px';
+  }
+
+  // --- Files ---
+  function handleFileSelect(event) {
+    for (const file of event.target.files) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        pendingFiles.push({ name: file.name, data: e.target.result.split(',')[1], size: file.size });
+        updateAttach();
+      };
+      reader.readAsDataURL(file);
+    }
+    event.target.value = '';
+  }
+
+  function removeFile(idx) {
+    pendingFiles.splice(idx, 1);
+    updateAttach();
+  }
+
+  function updateAttach() {
+    const el = document.getElementById('main-attach');
+    if (pendingFiles.length === 0) { el.style.display = 'none'; return; }
+    el.style.display = 'flex';
+    el.innerHTML = pendingFiles.map((f, i) =>
+      '<span class="attachment-chip">' + esc(f.name) +
+      ' <span class="chip-remove" onclick="removeFile(' + i + ')">\u00D7</span></span>'
+    ).join('');
+  }
+
+  // --- Voice ---
+  function toggleRecording() {
+    if (isRecording) {
+      if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop();
+      isRecording = false;
+      document.querySelector('#main-input .mic-btn')?.classList.remove('recording');
+    } else {
+      navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+        const mime = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
+        mediaRecorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+        audioChunks = [];
+        mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunks.push(e.data); };
+        mediaRecorder.onstop = () => {
+          const ext = (mediaRecorder.mimeType || '').includes('webm') ? 'webm' : 'ogg';
+          const blob = new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/ogg' });
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            pendingFiles.push({ name: 'recording.' + ext, data: e.target.result.split(',')[1], size: blob.size });
+            updateAttach();
+          };
+          reader.readAsDataURL(blob);
+          stream.getTracks().forEach(t => t.stop());
+        };
+        mediaRecorder.start();
+        isRecording = true;
+        document.querySelector('#main-input .mic-btn')?.classList.add('recording');
+      }).catch(() => {});
+    }
+  }
+
+  // --- Approval ---
+  function showApproval(requestId, toolName, input) {
+    pendingApprovalId = requestId;
+    document.getElementById('approval-tool-name').textContent = toolName;
+    const container = document.getElementById('approval-input');
+    container.innerHTML = '';
+    if (input && typeof input === 'object') {
+      for (const [key, val] of Object.entries(input)) {
+        const valStr = typeof val === 'object' ? JSON.stringify(val, null, 2) : String(val);
+        if (!valStr) continue;
+        const field = document.createElement('div');
+        field.className = 'approval-field';
+        field.innerHTML = '<div class="approval-field-label">' + esc(key) + '</div>';
+        const vd = document.createElement('div');
+        vd.className = 'approval-field-value';
+        vd.textContent = valStr;
+        field.appendChild(vd);
+        container.appendChild(field);
+      }
+    } else {
+      const vd = document.createElement('div');
+      vd.className = 'approval-field-value';
+      vd.textContent = String(input);
+      container.appendChild(vd);
+    }
+    document.getElementById('approval-overlay').classList.add('active');
+  }
+
+  function respondApproval(approved) {
+    if (pendingApprovalId && ws) {
+      ws.send(JSON.stringify({ type: 'approval_response', requestId: pendingApprovalId, approved }));
+    }
+    pendingApprovalId = null;
+    document.getElementById('approval-overlay').classList.remove('active');
+  }
+
+  // --- Util ---
+  function esc(str) {
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+  }
+
+  // Init
+  connect();
+</script>
+</body>
+</html>

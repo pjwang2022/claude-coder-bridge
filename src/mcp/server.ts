@@ -2,8 +2,14 @@ import express from 'express';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { z } from 'zod';
-import { PermissionManager } from './permission-manager.js';
-import type { LinePermissionManager } from '../line/permission-manager.js';
+import { PermissionManager } from '../channel/discord/permission-manager.js';
+import type { LinePermissionManager } from '../channel/line/permission-manager.js';
+import type { SlackPermissionManager } from '../channel/slack/permission-manager.js';
+import type { TelegramPermissionManager } from '../channel/telegram/permission-manager.js';
+import type { EmailPermissionManager } from '../channel/email/permission-manager.js';
+import type { WebUIPermissionManager } from '../channel/webui/permission-manager.js';
+import type { TeamsPermissionManager } from '../channel/teams/permission-manager.js';
+import type { PermissionDecision } from '../shared/permissions.js';
 
 export class MCPPermissionServer {
   private app: express.Application;
@@ -11,218 +17,64 @@ export class MCPPermissionServer {
   private server?: any;
   private permissionManager: PermissionManager;
   private linePermissionManager?: LinePermissionManager;
+  private slackPermissionManager?: SlackPermissionManager;
+  private telegramPermissionManager?: TelegramPermissionManager;
+  private emailPermissionManager?: EmailPermissionManager;
+  private webUIPermissionManager?: WebUIPermissionManager;
+  private teamsPermissionManager?: TeamsPermissionManager;
 
   constructor(port: number = 3001) {
     this.port = port;
     this.app = express();
     this.app.use(express.json());
     this.permissionManager = new PermissionManager();
-    
+
     this.setupRoutes();
   }
 
-  /**
-   * Set the Discord bot instance for the permission manager
-   */
   setDiscordBot(discordBot: any): void {
     this.permissionManager.setDiscordBot(discordBot);
   }
 
-  /**
-   * Get the permission manager instance
-   */
   getPermissionManager(): PermissionManager {
     return this.permissionManager;
   }
 
-  /**
-   * Extract Discord context from HTTP headers
-   */
-  private extractDiscordContext(req: any): any {
+  private extractDiscordContext(req: express.Request): any | undefined {
     const channelId = req.headers['x-discord-channel-id'];
-    const channelName = req.headers['x-discord-channel-name'];
-    const userId = req.headers['x-discord-user-id'];
-    const messageId = req.headers['x-discord-message-id'];
-    
     if (channelId) {
       return {
-        channelId: channelId,
-        channelName: channelName || 'unknown',
-        userId: userId || 'unknown',
-        messageId: messageId,
+        channelId,
+        channelName: req.headers['x-discord-channel-name'] || 'unknown',
+        userId: req.headers['x-discord-user-id'] || 'unknown',
+        messageId: req.headers['x-discord-message-id'],
       };
     }
-    
     return undefined;
   }
 
-  private setupRoutes(): void {
-    // Handle MCP requests (stateless mode)
-    this.app.post('/mcp', async (req, res) => {
-      try {
-        console.log('MCP request received:', req.body);
-        console.log('MCP request headers:', {
-          'x-discord-channel-id': req.headers['x-discord-channel-id'],
-          'x-discord-channel-name': req.headers['x-discord-channel-name'],
-          'x-discord-user-id': req.headers['x-discord-user-id'],
-          'x-discord-message-id': req.headers['x-discord-message-id'],
-        });
-        
-        // Extract Discord context from headers
-        const discordContextFromHeaders = this.extractDiscordContext(req);
-        
-        // Create new MCP server instance for each request (stateless)
-        const mcpServer = new McpServer({
-          name: 'Claude Code Permission Server',
-          version: '1.0.0',
-        });
-
-        // Add the approval tool
-        mcpServer.tool(
-          'approve_tool',
-          {
-            tool_name: z.string().describe('The tool requesting permission'),
-            input: z.object({}).passthrough().describe('The input for the tool'),
-            discord_context: z.object({
-              channelId: z.string(),
-              channelName: z.string(),
-              userId: z.string(),
-              messageId: z.string().optional(),
-            }).optional().describe('Discord context for permission decision'),
-          },
-          async ({ tool_name, input, discord_context }) => {
-            console.log('MCP Server: Permission request received:', { tool_name, input, discord_context });
-            
-            // Use discord_context from parameters, or fall back to headers
-            let effectiveDiscordContext = discord_context || discordContextFromHeaders;
-            
-            console.log('MCP Server: Effective Discord context:', effectiveDiscordContext);
-            
-            try {
-              const decision = await this.permissionManager.requestApproval(tool_name, input, effectiveDiscordContext);
-              
-              console.log('MCP Server: Permission decision:', decision);
-              
-              return {
-                content: [
-                  {
-                    type: 'text',
-                    text: JSON.stringify(decision),
-                  },
-                ],
-              };
-            } catch (error) {
-              console.error('MCP Server: Error processing permission request:', error);
-              
-              // Return deny on error for security
-              const errorDecision = {
-                behavior: 'deny',
-                message: `Permission request failed: ${error instanceof Error ? error.message : String(error)}`,
-              };
-              
-              return {
-                content: [
-                  {
-                    type: 'text',
-                    text: JSON.stringify(errorDecision),
-                  },
-                ],
-              };
-            }
-          }
-        );
-
-        // Create transport for this request
-        const transport = new StreamableHTTPServerTransport({
-          sessionIdGenerator: undefined, // Stateless
-        });
-
-        // Clean up when request closes
-        res.on('close', () => {
-          console.log('MCP request closed');
-          transport.close();
-          mcpServer.close();
-        });
-
-        // Connect server to transport
-        await mcpServer.connect(transport);
-        
-        // Handle the request
-        await transport.handleRequest(req, res, req.body);
-      } catch (error) {
-        console.error('Error handling MCP request:', error);
-        if (!res.headersSent) {
-          res.status(500).json({
-            jsonrpc: '2.0',
-            error: {
-              code: -32603,
-              message: 'Internal server error',
-            },
-            id: null,
-          });
-        }
-      }
-    });
-
-    // Handle GET requests (method not allowed for stateless mode)
-    this.app.get('/mcp', (req, res) => {
-      console.log('Received GET MCP request');
-      res.status(405).json({
-        jsonrpc: '2.0',
-        error: {
-          code: -32000,
-          message: 'Method not allowed - this server operates in stateless mode',
-        },
-        id: null,
-      });
-    });
-
-    // Handle DELETE requests (method not allowed for stateless mode)
-    this.app.delete('/mcp', (req, res) => {
-      console.log('Received DELETE MCP request');
-      res.status(405).json({
-        jsonrpc: '2.0',
-        error: {
-          code: -32000,
-          message: 'Method not allowed - this server operates in stateless mode',
-        },
-        id: null,
-      });
-    });
-
-    // Health check endpoint
-    this.app.get('/health', (req, res) => {
-      res.json({ 
-        status: 'ok', 
-        server: 'Claude Code Permission Server',
-        version: '1.0.0',
-        port: this.port 
-      });
-    });
+  private extractLineContext(req: express.Request): any | undefined {
+    const userId = req.headers['x-line-user-id'] as string | undefined;
+    if (userId) {
+      return {
+        userId,
+        projectName: (req.headers['x-line-project-name'] as string) || 'unknown',
+      };
+    }
+    return undefined;
   }
 
-  // --- LINE Integration (additive) ---
-
-  setLinePermissionManager(linePermissionManager: LinePermissionManager): void {
-    this.linePermissionManager = linePermissionManager;
-  }
-
-  registerLineRoutes(lineBotHandler: any): void {
-    // LINE webhook endpoint
-    this.app.post('/line/webhook', (req, res) => lineBotHandler.handleWebhook(req, res));
-
-    // LINE MCP permission endpoint (mirrors /mcp but for LINE context)
-    this.app.post('/line/mcp', async (req, res) => {
+  private createMcpHandler(
+    serverName: string,
+    extractContext: (req: express.Request) => any | undefined,
+    resolveApproval: (toolName: string, input: any, context: any | undefined) => Promise<PermissionDecision>,
+  ): express.RequestHandler {
+    return async (req: express.Request, res: express.Response) => {
       try {
-        const lineUserId = req.headers['x-line-user-id'] as string | undefined;
-        const lineProjectName = req.headers['x-line-project-name'] as string | undefined;
-
-        const lineContext = lineUserId
-          ? { userId: lineUserId, projectName: lineProjectName || 'unknown' }
-          : undefined;
+        const context = extractContext(req);
 
         const mcpServer = new McpServer({
-          name: 'Claude Code LINE Permission Server',
+          name: serverName,
           version: '1.0.0',
         });
 
@@ -234,22 +86,22 @@ export class MCPPermissionServer {
           },
           async ({ tool_name, input }) => {
             try {
-              if (!this.linePermissionManager) {
-                return {
-                  content: [{ type: 'text' as const, text: JSON.stringify({ behavior: 'deny', message: 'LINE permission manager not initialized' }) }],
-                };
-              }
-
-              const decision = await this.linePermissionManager.requestApproval(tool_name, input, lineContext);
+              const decision = await resolveApproval(tool_name, input, context);
               return {
                 content: [{ type: 'text' as const, text: JSON.stringify(decision) }],
               };
             } catch (error) {
               return {
-                content: [{ type: 'text' as const, text: JSON.stringify({ behavior: 'deny', message: `Permission error: ${error instanceof Error ? error.message : String(error)}` }) }],
+                content: [{
+                  type: 'text' as const,
+                  text: JSON.stringify({
+                    behavior: 'deny',
+                    message: `Permission error: ${error instanceof Error ? error.message : String(error)}`,
+                  }),
+                }],
               };
             }
-          }
+          },
         );
 
         const transport = new StreamableHTTPServerTransport({
@@ -264,7 +116,7 @@ export class MCPPermissionServer {
         await mcpServer.connect(transport);
         await transport.handleRequest(req, res, req.body);
       } catch (error) {
-        console.error('Error handling LINE MCP request:', error);
+        console.error(`Error handling MCP request (${serverName}):`, error);
         if (!res.headersSent) {
           res.status(500).json({
             jsonrpc: '2.0',
@@ -273,9 +125,272 @@ export class MCPPermissionServer {
           });
         }
       }
+    };
+  }
+
+  private setupRoutes(): void {
+    // Discord MCP permission endpoint
+    this.app.post('/mcp', this.createMcpHandler(
+      'Claude Code Permission Server',
+      (req) => this.extractDiscordContext(req),
+      (toolName, input, context) => this.permissionManager.requestApproval(toolName, input, context),
+    ));
+
+    // GET/DELETE not allowed for stateless mode
+    this.app.get('/mcp', (_req, res) => {
+      res.status(405).json({
+        jsonrpc: '2.0',
+        error: { code: -32000, message: 'Method not allowed - this server operates in stateless mode' },
+        id: null,
+      });
     });
 
+    this.app.delete('/mcp', (_req, res) => {
+      res.status(405).json({
+        jsonrpc: '2.0',
+        error: { code: -32000, message: 'Method not allowed - this server operates in stateless mode' },
+        id: null,
+      });
+    });
+
+    // Health check
+    this.app.get('/health', (_req, res) => {
+      res.json({
+        status: 'ok',
+        server: 'Claude Code Permission Server',
+        version: '1.0.0',
+        port: this.port,
+      });
+    });
+  }
+
+  // --- Slack Integration ---
+
+  setSlackPermissionManager(slackPermissionManager: SlackPermissionManager): void {
+    this.slackPermissionManager = slackPermissionManager;
+  }
+
+  registerSlackMcpRoute(slackPermissionManager: SlackPermissionManager): void {
+    this.app.post('/slack/mcp', this.createMcpHandler(
+      'Claude Code Slack Permission Server',
+      (req) => this.extractSlackContext(req),
+      (toolName, input, context) => {
+        if (!slackPermissionManager) {
+          return Promise.resolve({ behavior: 'deny' as const, message: 'Slack permission manager not initialized' });
+        }
+        return slackPermissionManager.requestApproval(toolName, input, context);
+      },
+    ));
+
+    console.log('Slack MCP route registered: /slack/mcp');
+  }
+
+  private extractSlackContext(req: express.Request): any | undefined {
+    const channelId = req.headers['x-slack-channel-id'] as string | undefined;
+    if (channelId) {
+      return {
+        channelId,
+        channelName: req.headers['x-slack-channel-name'] || 'unknown',
+        userId: req.headers['x-slack-user-id'] || 'unknown',
+        threadTs: req.headers['x-slack-thread-ts'],
+      };
+    }
+    return undefined;
+  }
+
+  // --- Telegram Integration ---
+
+  setTelegramPermissionManager(telegramPermissionManager: TelegramPermissionManager): void {
+    this.telegramPermissionManager = telegramPermissionManager;
+  }
+
+  registerTelegramMcpRoute(telegramPermissionManager: TelegramPermissionManager): void {
+    this.app.post('/telegram/mcp', this.createMcpHandler(
+      'Claude Code Telegram Permission Server',
+      (req) => this.extractTelegramContext(req),
+      (toolName, input, context) => {
+        if (!telegramPermissionManager) {
+          return Promise.resolve({ behavior: 'deny' as const, message: 'Telegram permission manager not initialized' });
+        }
+        return telegramPermissionManager.requestApproval(toolName, input, context);
+      },
+    ));
+
+    console.log('Telegram MCP route registered: /telegram/mcp');
+  }
+
+  private extractTelegramContext(req: express.Request): any | undefined {
+    const userId = req.headers['x-telegram-user-id'] as string | undefined;
+    if (userId) {
+      return {
+        userId: parseInt(userId) || 0,
+        chatId: parseInt(req.headers['x-telegram-chat-id'] as string) || 0,
+        projectName: (req.headers['x-telegram-project-name'] as string) || 'unknown',
+      };
+    }
+    return undefined;
+  }
+
+  // --- Email Integration ---
+
+  setEmailPermissionManager(emailPermissionManager: EmailPermissionManager): void {
+    this.emailPermissionManager = emailPermissionManager;
+  }
+
+  registerEmailMcpRoute(emailPermissionManager: EmailPermissionManager): void {
+    this.app.post('/email/mcp', this.createMcpHandler(
+      'Claude Code Email Permission Server',
+      (req) => this.extractEmailContext(req),
+      (toolName, input, context) => {
+        if (!emailPermissionManager) {
+          return Promise.resolve({ behavior: 'deny' as const, message: 'Email permission manager not initialized' });
+        }
+        return emailPermissionManager.requestApproval(toolName, input, context);
+      },
+    ));
+
+    // Approval HTTP routes (for clickable links in emails)
+    this.app.get('/email/approve', (req: express.Request, res: express.Response) => {
+      this.handleEmailApproval(req, res, true);
+    });
+
+    this.app.get('/email/deny', (req: express.Request, res: express.Response) => {
+      this.handleEmailApproval(req, res, false);
+    });
+
+    console.log('Email MCP route registered: /email/mcp, /email/approve, /email/deny');
+  }
+
+  private handleEmailApproval(req: express.Request, res: express.Response, approved: boolean): void {
+    const requestId = req.query.requestId as string;
+    const token = req.query.token as string;
+
+    if (!requestId || !token || !this.emailPermissionManager) {
+      res.status(400).send(this.approvalHtmlPage('Error', 'Invalid or missing parameters.'));
+      return;
+    }
+
+    const result = this.emailPermissionManager.handleApprovalHttp(requestId, token, approved);
+    const title = result.success ? (approved ? 'Approved' : 'Denied') : 'Error';
+    res.status(result.success ? 200 : 400).send(this.approvalHtmlPage(title, result.message));
+  }
+
+  private approvalHtmlPage(title: string, message: string): string {
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title></head>
+<body style="font-family:system-ui,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;background:#f5f5f5;">
+<div style="text-align:center;padding:40px;background:#fff;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.1);">
+<h1>${title}</h1><p>${message}</p><p style="color:#999;font-size:14px;">You can close this tab.</p>
+</div></body></html>`;
+  }
+
+  private extractEmailContext(req: express.Request): any | undefined {
+    const from = req.headers['x-email-from'] as string | undefined;
+    if (from) {
+      return {
+        from,
+        subject: '',
+        projectName: (req.headers['x-email-project-name'] as string) || 'unknown',
+        messageId: (req.headers['x-email-message-id'] as string) || '',
+      };
+    }
+    return undefined;
+  }
+
+  // --- WebUI Integration ---
+
+  setWebUIPermissionManager(webUIPermissionManager: WebUIPermissionManager): void {
+    this.webUIPermissionManager = webUIPermissionManager;
+  }
+
+  registerWebUIMcpRoute(webUIPermissionManager: WebUIPermissionManager): void {
+    this.app.post('/webui/mcp', this.createMcpHandler(
+      'Claude Code WebUI Permission Server',
+      (req) => this.extractWebUIContext(req),
+      (toolName, input, context) => {
+        if (!webUIPermissionManager) {
+          return Promise.resolve({ behavior: 'deny' as const, message: 'WebUI permission manager not initialized' });
+        }
+        return webUIPermissionManager.requestApproval(toolName, input, context);
+      },
+    ));
+
+    console.log('WebUI MCP route registered: /webui/mcp');
+  }
+
+  private extractWebUIContext(req: express.Request): any | undefined {
+    const connectionId = req.headers['x-webui-connection-id'] as string | undefined;
+    if (connectionId) {
+      return {
+        connectionId,
+        project: (req.headers['x-webui-project'] as string) || 'unknown',
+      };
+    }
+    return undefined;
+  }
+
+  // --- Teams Integration ---
+
+  setTeamsPermissionManager(teamsPermissionManager: TeamsPermissionManager): void {
+    this.teamsPermissionManager = teamsPermissionManager;
+  }
+
+  registerTeamsMcpRoute(teamsPermissionManager: TeamsPermissionManager): void {
+    this.app.post('/teams/mcp', this.createMcpHandler(
+      'Claude Code Teams Permission Server',
+      (req) => this.extractTeamsContext(req),
+      (toolName, input, context) => {
+        if (!teamsPermissionManager) {
+          return Promise.resolve({ behavior: 'deny' as const, message: 'Teams permission manager not initialized' });
+        }
+        return teamsPermissionManager.requestApproval(toolName, input, context);
+      },
+    ));
+
+    console.log('Teams MCP route registered: /teams/mcp');
+  }
+
+  private extractTeamsContext(req: express.Request): any | undefined {
+    const userId = req.headers['x-teams-user-id'] as string | undefined;
+    if (userId) {
+      return {
+        userId,
+        conversationId: (req.headers['x-teams-conversation-id'] as string) || 'unknown',
+        serviceUrl: (req.headers['x-teams-service-url'] as string) || 'unknown',
+        projectName: (req.headers['x-teams-project-name'] as string) || 'unknown',
+      };
+    }
+    return undefined;
+  }
+
+  // --- LINE Integration ---
+
+  setLinePermissionManager(linePermissionManager: LinePermissionManager): void {
+    this.linePermissionManager = linePermissionManager;
+  }
+
+  registerLineRoutes(lineBotHandler: any): void {
+    this.app.post('/line/webhook', (req, res) => lineBotHandler.handleWebhook(req, res));
+
+    this.app.post('/line/mcp', this.createMcpHandler(
+      'Claude Code LINE Permission Server',
+      (req) => this.extractLineContext(req),
+      (toolName, input, context) => {
+        if (!this.linePermissionManager) {
+          return Promise.resolve({ behavior: 'deny' as const, message: 'LINE permission manager not initialized' });
+        }
+        return this.linePermissionManager.requestApproval(toolName, input, context);
+      },
+    ));
+
     console.log('LINE routes registered: /line/webhook, /line/mcp');
+  }
+
+  getExpressApp(): express.Application {
+    return this.app;
+  }
+
+  getHttpServer(): any {
+    return this.server;
   }
 
   async start(): Promise<void> {
@@ -294,9 +409,13 @@ export class MCPPermissionServer {
   }
 
   async stop(): Promise<void> {
-    // Clean up permission managers
     this.permissionManager.cleanup();
     this.linePermissionManager?.cleanup();
+    this.slackPermissionManager?.cleanup();
+    this.telegramPermissionManager?.cleanup();
+    this.emailPermissionManager?.cleanup();
+    this.webUIPermissionManager?.cleanup();
+    this.teamsPermissionManager?.cleanup();
 
     if (this.server) {
       return new Promise((resolve) => {
