@@ -1,4 +1,5 @@
 import * as crypto from 'crypto';
+import * as fs from 'fs';
 import * as path from 'path';
 import type { Request, Response } from 'express';
 import type { LineWebhookBody, LineWebhookEvent } from './types.js';
