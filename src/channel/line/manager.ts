@@ -126,6 +126,16 @@ export class LINEClaudeManager {
     return taskId;
   }
 
+  cancelTask(userId: string, projectName: string): void {
+    const processKey = `${userId}:${projectName}`;
+    const handle = this.activeProcesses.get(processKey);
+    if (handle) {
+      console.log(`LINE: Cancelling task for ${userId} in ${projectName}`);
+      handle.kill();
+      this.activeProcesses.delete(processKey);
+    }
+  }
+
   clearSession(userId: string, projectName: string): void {
     const processKey = `${userId}:${projectName}`;
     const handle = this.activeProcesses.get(processKey);

@@ -60,6 +60,12 @@ export class SlackBot {
       await ack();
       await this.handleClearCommand(command);
     });
+
+    // /cancel slash command
+    this.app.command('/cancel', async ({ command, ack }) => {
+      await ack();
+      await this.handleCancelCommand(command);
+    });
   }
 
   private async handleMessage(event: any, client: any): Promise<void> {
@@ -211,6 +217,58 @@ export class SlackBot {
     }
   }
 
+  private async handleCancelCommand(command: any): Promise<void> {
+    const userId = command.user_id;
+
+    // Auth check
+    if (this.config.allowedUserIds.length > 0 && !this.config.allowedUserIds.includes(userId)) {
+      return;
+    }
+
+    const channelId = command.channel_id;
+
+    try {
+      if (this.isDMChannel(channelId)) {
+        const projectName = this.db.getSlackUserProject(userId);
+        if (!projectName) {
+          await this.app.client.chat.postMessage({
+            channel: channelId,
+            text: 'No project selected. Use `/project <name>` first.',
+          });
+          return;
+        }
+        const sessionKey = `slack:dm:${userId}:${projectName}`;
+        if (!this.claudeManager.hasActiveProcess(sessionKey)) {
+          await this.app.client.chat.postMessage({
+            channel: channelId,
+            text: 'No active task to cancel.',
+          });
+          return;
+        }
+        this.claudeManager.killActiveProcess(sessionKey);
+        await this.app.client.chat.postMessage({
+          channel: channelId,
+          text: `:stop_sign: Task cancelled for project: \`${projectName}\`. Session is preserved.`,
+        });
+      } else {
+        if (!this.claudeManager.hasActiveProcess(channelId)) {
+          await this.app.client.chat.postMessage({
+            channel: channelId,
+            text: 'No active task to cancel.',
+          });
+          return;
+        }
+        this.claudeManager.killActiveProcess(channelId);
+        await this.app.client.chat.postMessage({
+          channel: channelId,
+          text: ':stop_sign: Task cancelled. Session is preserved — you can continue chatting.',
+        });
+      }
+    } catch (error) {
+      console.error('Slack: Error sending cancel confirmation:', error);
+    }
+  }
+
   private isDMChannel(channelId: string): boolean {
     return channelId.startsWith('D');
   }
@@ -242,6 +300,30 @@ export class SlackBot {
       });
       return;
     }
+    if (text === '/cancel') {
+      const projectName = this.db.getSlackUserProject(userId);
+      if (!projectName) {
+        await this.app.client.chat.postMessage({
+          channel: channelId,
+          text: 'No project selected. Use `/project <name>` first.',
+        });
+        return;
+      }
+      const sessionKey = `slack:dm:${userId}:${projectName}`;
+      if (!this.claudeManager.hasActiveProcess(sessionKey)) {
+        await this.app.client.chat.postMessage({
+          channel: channelId,
+          text: 'No active task to cancel.',
+        });
+        return;
+      }
+      this.claudeManager.killActiveProcess(sessionKey);
+      await this.app.client.chat.postMessage({
+        channel: channelId,
+        text: `:stop_sign: Task cancelled for project: \`${projectName}\`. Session is preserved.`,
+      });
+      return;
+    }
     if (text === '/help') {
       await this.app.client.chat.postMessage({
         channel: channelId,
@@ -249,6 +331,7 @@ export class SlackBot {
           '*DM Commands:*',
           '`/project` - List available projects',
           '`/project <name>` - Set current project',
+          '`/cancel` - Cancel the current running task',
           '`/clear` - Clear session for current project',
           '`/help` - Show this message',
           '',

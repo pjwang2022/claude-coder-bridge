@@ -146,6 +146,16 @@ export class EmailClaudeManager {
     return taskId;
   }
 
+  cancelTask(userEmail: string, projectName: string): void {
+    const processKey = `${userEmail}:${projectName}`;
+    const handle = this.activeProcesses.get(processKey);
+    if (handle) {
+      console.log(`Email: Cancelling task for ${userEmail} in ${projectName}`);
+      handle.kill();
+      this.activeProcesses.delete(processKey);
+    }
+  }
+
   clearSession(userEmail: string, projectName: string): void {
     const processKey = `${userEmail}:${projectName}`;
     const handle = this.activeProcesses.get(processKey);

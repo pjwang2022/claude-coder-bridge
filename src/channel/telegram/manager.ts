@@ -132,6 +132,16 @@ export class TelegramClaudeManager {
     return taskId;
   }
 
+  cancelTask(userId: number, projectName: string): void {
+    const processKey = `${userId}:${projectName}`;
+    const handle = this.activeProcesses.get(processKey);
+    if (handle) {
+      console.log(`Telegram: Cancelling task for ${userId} in ${projectName}`);
+      handle.kill();
+      this.activeProcesses.delete(processKey);
+    }
+  }
+
   clearSession(userId: number, projectName: string): void {
     const processKey = `${userId}:${projectName}`;
     const handle = this.activeProcesses.get(processKey);

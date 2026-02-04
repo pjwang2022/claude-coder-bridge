@@ -12,6 +12,9 @@ export class CommandHandler {
       new SlashCommandBuilder()
         .setName("clear")
         .setDescription("Clear the current Claude Code session"),
+      new SlashCommandBuilder()
+        .setName("cancel")
+        .setDescription("Cancel the current running Claude Code task"),
     ];
   }
 
@@ -46,6 +49,16 @@ export class CommandHandler {
       await interaction.reply(
         "Session cleared! Next message will start a new Claude Code session."
       );
+    } else if (interaction.commandName === "cancel") {
+      const channelId = interaction.channelId;
+
+      if (!this.claudeManager.hasActiveProcess(channelId)) {
+        await interaction.reply("No active task to cancel.");
+        return;
+      }
+
+      this.claudeManager.killActiveProcess(channelId);
+      await interaction.reply("Task cancelled. Session is preserved — you can continue chatting.");
     }
   }
 }

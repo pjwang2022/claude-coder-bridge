@@ -109,6 +109,8 @@ export class LineBotHandler {
       await this.handleResultCommand(event, userId);
     } else if (text === '/status') {
       await this.handleStatusCommand(event, userId);
+    } else if (text === '/cancel') {
+      await this.handleCancelCommand(event, userId);
     } else if (text === '/clear') {
       await this.handleClearCommand(event, userId);
     } else if (text === '/help') {
@@ -176,6 +178,22 @@ export class LineBotHandler {
   private async handleStatusCommand(event: LineWebhookEvent, userId: string): Promise<void> {
     const running = this.db.getRunningLineTasks(userId);
     await this.replyMessage(event.replyToken, [buildStatusReply(running)]);
+  }
+
+  private async handleCancelCommand(event: LineWebhookEvent, userId: string): Promise<void> {
+    const projectName = this.db.getLineUserProject(userId);
+    if (!projectName) {
+      await this.replyText(event.replyToken, 'No project selected. Use /project <name> first.');
+      return;
+    }
+
+    if (!this.claudeManager.hasActiveProcess(userId, projectName)) {
+      await this.replyText(event.replyToken, 'No active task to cancel.');
+      return;
+    }
+
+    this.claudeManager.cancelTask(userId, projectName);
+    await this.replyText(event.replyToken, `Task cancelled for project: ${projectName}. Session is preserved.`);
   }
 
   private async handleClearCommand(event: LineWebhookEvent, userId: string): Promise<void> {

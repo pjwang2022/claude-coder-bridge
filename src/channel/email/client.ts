@@ -293,6 +293,22 @@ export class EmailBot {
       return;
     }
 
+    if (body.startsWith('/cancel')) {
+      if (!this.claudeManager.hasActiveProcess(from, projectName)) {
+        await this.sendReply(from, messageId, {
+          subject: `No active task: ${projectName}`,
+          text: 'No active task to cancel.',
+        });
+        return;
+      }
+      this.claudeManager.cancelTask(from, projectName);
+      await this.sendReply(from, messageId, {
+        subject: `Task cancelled: ${projectName}`,
+        text: `Task cancelled for project: ${projectName}. Session is preserved.`,
+      });
+      return;
+    }
+
     if (body.startsWith('/clear')) {
       this.claudeManager.clearSession(from, projectName);
       await this.sendReply(from, messageId, {

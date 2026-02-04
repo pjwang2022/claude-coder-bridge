@@ -44,6 +44,7 @@ export class TelegramBot {
     this.bot.command('result', (ctx) => this.handleResultCommand(ctx));
     this.bot.command('status', (ctx) => this.handleStatusCommand(ctx));
     this.bot.command('clear', (ctx) => this.handleClearCommand(ctx));
+    this.bot.command('cancel', (ctx) => this.handleCancelCommand(ctx));
     this.bot.command('help', (ctx) => this.handleHelpCommand(ctx));
 
     // Callback queries (approval buttons)
@@ -164,6 +165,25 @@ export class TelegramBot {
 
     this.claudeManager.clearSession(userId, projectName);
     await ctx.reply(`Session cleared for project: ${projectName}`);
+  }
+
+  private async handleCancelCommand(ctx: any): Promise<void> {
+    const userId = ctx.from?.id;
+    if (!userId || !this.isAuthorized(userId)) return;
+
+    const projectName = this.db.getTelegramUserProject(userId);
+    if (!projectName) {
+      await ctx.reply('No project selected. Use /project <name> first.');
+      return;
+    }
+
+    if (!this.claudeManager.hasActiveProcess(userId, projectName)) {
+      await ctx.reply('No active task to cancel.');
+      return;
+    }
+
+    this.claudeManager.cancelTask(userId, projectName);
+    await ctx.reply(`Task cancelled for project: ${projectName}. Session is preserved.`);
   }
 
   private async handleHelpCommand(ctx: any): Promise<void> {

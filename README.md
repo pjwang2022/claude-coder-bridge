@@ -117,6 +117,7 @@ ALLOWED_USER_ID=your_discord_user_id
 | Command | Description |
 |---------|-------------|
 | Any message | Run Claude Code with your message as the prompt |
+| `/cancel` | Cancel the current running task (session preserved) |
 | `/clear` | Reset the current channel's session |
 
 **Approval**: When Claude needs to run a dangerous tool, the bot posts a message. React with :white_check_mark: to approve or :x: to deny. Timeout: 30 seconds.
@@ -145,6 +146,7 @@ LINE_ALLOWED_USER_IDS=U1234abc,U5678def   # Optional: restrict access
 | `/project <name>` | Select a project |
 | `/result` | Get the latest task result |
 | `/status` | Check running tasks |
+| `/cancel` | Cancel the current running task (session preserved) |
 | `/clear` | Clear the session for the current project |
 | `/help` | Show help |
 | Any message | Run Claude Code (requires project selected) |
@@ -179,6 +181,7 @@ SLACK_ALLOWED_USER_IDS=U01234567,U89012345   # Optional: restrict access
 | Command | Description |
 |---------|-------------|
 | Any message | Run Claude Code with your message as the prompt |
+| `/cancel` | Cancel the current running task (session preserved) |
 | `/clear` | Reset the current channel's session |
 
 **Approval**: Bot posts an approval message. React with :white_check_mark: to approve or :x: to deny. Timeout: 30 seconds.
@@ -208,6 +211,7 @@ TELEGRAM_ALLOWED_USER_IDS=123456789,987654321   # Optional: restrict access
 | `/project <name>` | Select a project |
 | `/result` | Get the latest task result |
 | `/status` | Check running tasks |
+| `/cancel` | Cancel the current running task (session preserved) |
 | `/clear` | Clear the session for the current project |
 | `/help` | Show help |
 | Any message | Run Claude Code (requires project selected) |
@@ -243,6 +247,7 @@ EMAIL_ALLOWED_SENDERS=user@example.com,user2@example.com   # Optional: restrict 
 | `Subject: [my-app] fix the login bug` | Run Claude Code in the `my-app` folder with the email body as the prompt |
 | Body: `/result` | Get the latest task result |
 | Body: `/status` | Check running tasks |
+| Body: `/cancel` | Cancel the current running task (session preserved) |
 | Body: `/clear` | Clear the session for the project in the subject |
 | Body: `/help` | Show help |
 
@@ -267,6 +272,7 @@ WEB_UI_PASSWORD=your_secret_password   # Optional: leave unset for no auth
 |--------|-------------|
 | Select project dropdown | Choose which project folder to work in |
 | Type message + Send | Run Claude Code with your message as the prompt |
+| Cancel Task button | Cancel the current running task (session preserved) |
 | Clear Session button | Reset the session for the current project |
 
 **Approval**: When Claude needs to run a dangerous tool, a modal pops up in the browser with Approve / Deny buttons. Timeout: 120 seconds.

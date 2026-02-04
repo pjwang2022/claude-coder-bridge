@@ -127,6 +127,9 @@ export class WebUIServer {
       case 'approval_response':
         this.handleApprovalResponse(conn, msg);
         break;
+      case 'cancel_task':
+        this.handleCancelTask(conn, msg);
+        break;
       case 'clear_session':
         this.handleClearSession(conn, msg);
         break;
@@ -290,6 +293,23 @@ export class WebUIServer {
     fs.mkdirSync(projectPath, { recursive: true });
     console.log(`WebUI: Created project directory: ${projectPath}`);
     this.sendProjectList(conn.ws);
+  }
+
+  private handleCancelTask(conn: Connection, msg: any): void {
+    if (!conn.authenticated) return;
+
+    const project = msg.project;
+    if (!project) return;
+
+    const sessionName = msg.sessionName || 'default';
+
+    if (!this.claudeManager.hasActiveProcess(conn.connectionId, project, sessionName)) {
+      this.sendJson(conn.ws, { type: 'error', message: 'No active task to cancel.' });
+      return;
+    }
+
+    this.claudeManager.cancelTask(conn.connectionId, project, sessionName);
+    this.sendJson(conn.ws, { type: 'task_cancelled', project, sessionName });
   }
 
   private handleClearSession(conn: Connection, msg: any): void {

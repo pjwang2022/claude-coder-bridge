@@ -43,6 +43,16 @@ export class WebUIClaudeManager {
     return this.db.getWebUISessionClaudeId(project, sessionName);
   }
 
+  cancelTask(connectionId: string, project: string, sessionName: string = 'default'): void {
+    const processKey = `${connectionId}:${project}:${sessionName}`;
+    const active = this.connectionProcesses.get(processKey);
+    if (active?.handle) {
+      console.log(`WebUI: Cancelling task for ${connectionId} in ${project}/${sessionName}`);
+      active.handle.kill();
+    }
+    this.connectionProcesses.delete(processKey);
+  }
+
   clearSession(connectionId: string, project: string, sessionName: string = 'default'): void {
     const processKey = `${connectionId}:${project}:${sessionName}`;
     const active = this.connectionProcesses.get(processKey);
