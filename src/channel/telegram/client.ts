@@ -1,4 +1,5 @@
 import { Telegraf } from 'telegraf';
+import * as fs from 'fs';
 import * as path from 'path';
 import type { TelegramConfig } from './types.js';
 import type { TelegramClaudeManager } from './manager.js';
