@@ -6,7 +6,7 @@ import { buildClaudeCommand, type DiscordContext } from "./shell.js";
 import { spawnClaudeProcess, type ProcessHandle } from "../../shared/process-runner.js";
 import { DatabaseManager } from "../../db/database.js";
 import { getProcessTimeoutMs } from '../../utils/config.js';
-import { truncateWithSave } from '../../shared/message-truncator.js';
+
 import { createThrottle } from '../../shared/throttle.js';
 import { cleanupOldAttachments } from '../../shared/attachments.js';
 
@@ -312,15 +312,9 @@ export class ClaudeManager {
     const resultEmbed = new EmbedBuilder();
 
     if (parsed.subtype === "success") {
-      let description = "result" in parsed ? parsed.result : "Task completed";
-      const workingDir = path.join(this.baseFolder, channelName);
-      const truncated = truncateWithSave(description, 'discord', workingDir);
-      description = truncated.text;
-      description += `\n\n*Completed in ${parsed.num_turns} turns*`;
-
       resultEmbed
         .setTitle("✅ Session Complete")
-        .setDescription(description)
+        .setDescription(`*Completed in ${parsed.num_turns} turns*`)
         .setColor(0x00FF00);
     } else {
       resultEmbed

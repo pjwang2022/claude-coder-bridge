@@ -6,7 +6,7 @@ import { buildSlackClaudeCommand, type SlackContext } from './shell.js';
 import { spawnClaudeProcess, type ProcessHandle } from '../../shared/process-runner.js';
 import { DatabaseManager } from '../../db/database.js';
 import { getProcessTimeoutMs } from '../../utils/config.js';
-import { truncateWithSave } from '../../shared/message-truncator.js';
+
 import { createThrottle } from '../../shared/throttle.js';
 import { cleanupOldAttachments } from '../../shared/attachments.js';
 
@@ -276,11 +276,7 @@ export class SlackClaudeManager {
 
     let text: string;
     if (parsed.subtype === 'success') {
-      let description = 'result' in parsed ? parsed.result : 'Task completed';
-      const workingDir = path.join(this.baseFolder, channelName);
-      const truncated = truncateWithSave(description, 'slack', workingDir);
-      description = truncated.text;
-      text = `:white_check_mark: *Session Complete*\n${description}\n\n_Completed in ${parsed.num_turns} turns_`;
+      text = `:white_check_mark: *Session Complete*\n_Completed in ${parsed.num_turns} turns_`;
     } else {
       text = `:x: *Session Failed*\nTask failed: ${parsed.subtype}`;
     }
