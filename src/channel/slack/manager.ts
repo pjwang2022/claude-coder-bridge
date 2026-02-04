@@ -23,6 +23,7 @@ export class SlackClaudeManager {
       sessionId?: string;
     }
   >();
+  private channelIdMapping = new Map<string, string>(); // trackingKey → real Slack channelId
 
   constructor(private baseFolder: string) {
     this.db = new DatabaseManager();
@@ -55,6 +56,7 @@ export class SlackClaudeManager {
     this.channelNames.delete(channelId);
     this.channelToolCalls.delete(channelId);
     this.channelProcesses.delete(channelId);
+    this.channelIdMapping.delete(channelId);
   }
 
   reserveChannel(channelId: string, sessionId: string | undefined): void {
@@ -80,9 +82,11 @@ export class SlackClaudeManager {
     prompt: string,
     sessionId?: string,
     slackContext?: SlackContext,
+    postToChannelId?: string,
   ): Promise<void> {
     this.channelNames.set(channelId, channelName);
     this.channelToolCalls.set(channelId, new Map());
+    this.channelIdMapping.set(channelId, postToChannelId || channelId);
     const workingDir = path.join(this.baseFolder, channelName);
     console.log(`Slack: Running Claude Code in: ${workingDir}`);
 
@@ -148,9 +152,10 @@ export class SlackClaudeManager {
 
   private async postMessage(channelId: string, text: string): Promise<string | undefined> {
     if (!this.slackClient) return undefined;
+    const realChannelId = this.channelIdMapping.get(channelId) || channelId;
     try {
       const result = await this.apiThrottle(() =>
-        this.slackClient!.chat.postMessage({ channel: channelId, text })
+        this.slackClient!.chat.postMessage({ channel: realChannelId, text })
       );
       return result.ts;
     } catch (error) {
@@ -161,9 +166,10 @@ export class SlackClaudeManager {
 
   private async updateMessage(channelId: string, ts: string, text: string): Promise<void> {
     if (!this.slackClient) return;
+    const realChannelId = this.channelIdMapping.get(channelId) || channelId;
     try {
       await this.apiThrottle(() =>
-        this.slackClient!.chat.update({ channel: channelId, ts, text })
+        this.slackClient!.chat.update({ channel: realChannelId, ts, text })
       );
     } catch (error) {
       console.error('Slack: Error updating message:', error);

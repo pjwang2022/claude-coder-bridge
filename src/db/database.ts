@@ -130,6 +130,15 @@ export class DatabaseManager {
       ON email_task_results(user_email, status)
     `);
 
+    // Slack: user project selection (for DMs)
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS slack_user_projects (
+        user_id TEXT PRIMARY KEY,
+        project_name TEXT NOT NULL,
+        updated_at INTEGER NOT NULL
+      )
+    `);
+
     // WebUI: sessions per project
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS webui_sessions (
@@ -358,6 +367,27 @@ export class DatabaseManager {
 
   deleteLineUserProject(userId: string): void {
     const stmt = this.db.prepare("DELETE FROM line_user_projects WHERE user_id = ?");
+    stmt.run(userId);
+  }
+
+  // --- Slack: User Project Management (DMs) ---
+
+  getSlackUserProject(userId: string): string | undefined {
+    const stmt = this.db.prepare("SELECT project_name FROM slack_user_projects WHERE user_id = ?");
+    const result = stmt.get(userId) as { project_name: string } | null;
+    return result?.project_name;
+  }
+
+  setSlackUserProject(userId: string, projectName: string): void {
+    const stmt = this.db.prepare(`
+      INSERT OR REPLACE INTO slack_user_projects (user_id, project_name, updated_at)
+      VALUES (?, ?, ?)
+    `);
+    stmt.run(userId, projectName, Date.now());
+  }
+
+  deleteSlackUserProject(userId: string): void {
+    const stmt = this.db.prepare("DELETE FROM slack_user_projects WHERE user_id = ?");
     stmt.run(userId);
   }
 

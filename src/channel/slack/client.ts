@@ -1,4 +1,5 @@
 import * as path from 'path';
+import * as fs from 'fs';
 import { App } from '@slack/bolt';
 import type { SlackConfig } from './types.js';
 import type { SlackClaudeManager } from './manager.js';
@@ -6,17 +7,20 @@ import type { SlackPermissionManager } from './permission-manager.js';
 import { validateFile } from '../../shared/file-validator.js';
 import { saveAttachment, buildAttachmentPrompt } from '../../shared/attachments.js';
 import { transcribeAudio } from '../../shared/speechmatics.js';
+import { DatabaseManager } from '../../db/database.js';
 
 export class SlackBot {
   public app: App;
   private permissionManager?: SlackPermissionManager;
   private channelNameCache = new Map<string, string>();
+  private db: DatabaseManager;
 
   constructor(
     private config: SlackConfig,
     private claudeManager: SlackClaudeManager,
     private baseFolder: string,
   ) {
+    this.db = new DatabaseManager();
     this.app = new App({
       token: config.botToken,
       appToken: config.appToken,
@@ -63,6 +67,14 @@ export class SlackBot {
 
     const channelId = event.channel;
 
+    // Branch: DM vs channel
+    if (this.isDMChannel(channelId)) {
+      await this.handleDMMessage(event);
+      return;
+    }
+
+    // --- Channel flow (unchanged) ---
+
     // Atomic check: if channel already processing, skip
     if (this.claudeManager.hasActiveProcess(channelId)) {
       console.log(`Slack: Channel ${channelId} is already processing, skipping`);
@@ -79,77 +91,8 @@ export class SlackBot {
 
     // Build prompt from text + attachments
     const workingDir = path.join(this.baseFolder, channelName);
-    const allFiles = event.files || [];
-
-    // Validate and categorize files
-    const rejected: string[] = [];
-    const validFiles: any[] = [];
-    for (const f of allFiles) {
-      const result = validateFile(f.name || 'unknown', f.size || 0);
-      if (!result.allowed) {
-        rejected.push(`${f.name}: ${result.reason}`);
-      } else {
-        validFiles.push({ ...f, _category: result.category });
-      }
-    }
-
-    if (rejected.length > 0) {
-      await this.app.client.chat.postMessage({
-        channel: channelId,
-        text: `Unsupported files:\n${rejected.join('\n')}`,
-      });
-    }
-
-    // Download and save valid files
-    const savedPaths = validFiles.length > 0
-      ? await this.downloadAttachments(validFiles, workingDir)
-      : [];
-
-    // Check for audio files for voice transcription
-    const audioFiles = validFiles.filter((f: any) => f._category === 'audio');
-    let prompt = event.text || '';
-
-    if (audioFiles.length > 0) {
-      const speechmaticsApiKey = process.env.SPEECHMATICS_API_KEY;
-      if (!speechmaticsApiKey) {
-        await this.app.client.chat.postMessage({
-          channel: channelId,
-          text: 'Voice messages are not supported (SPEECHMATICS_API_KEY not set). Please send text.',
-        });
-      } else {
-        const file = audioFiles[0];
-        try {
-          const response = await fetch(file.url_private, {
-            headers: { 'Authorization': `Bearer ${this.config.botToken}` },
-          });
-          if (response.ok) {
-            const buffer = Buffer.from(await response.arrayBuffer());
-            const language = process.env.SPEECHMATICS_LANGUAGE || 'cmn';
-            await this.app.client.chat.postMessage({ channel: channelId, text: 'Transcribing audio...' });
-            const transcribedText = await transcribeAudio(speechmaticsApiKey, buffer, file.name || 'audio.ogg', language);
-            if (transcribedText.trim()) {
-              await this.app.client.chat.postMessage({ channel: channelId, text: `Transcription: "${transcribedText}"` });
-              prompt = transcribedText;
-            } else {
-              await this.app.client.chat.postMessage({ channel: channelId, text: 'Could not transcribe audio (empty result).' });
-            }
-          }
-        } catch (error) {
-          console.error('Slack: Audio transcription error:', error);
-          await this.app.client.chat.postMessage({ channel: channelId, text: 'Failed to transcribe audio.' });
-        }
-      }
-    }
-
-    // Append attachment paths to prompt
-    const nonAudioPaths = savedPaths.filter(p => !audioFiles.some((f: any) => p.includes(f.name)));
-    if (nonAudioPaths.length > 0) {
-      prompt = prompt
-        ? `${prompt}${buildAttachmentPrompt(nonAudioPaths)}`
-        : `[User sent an image]${buildAttachmentPrompt(nonAudioPaths)}`;
-    }
-
-    if (!prompt.trim()) {
+    const prompt = await this.buildPromptFromEvent(event, channelId, workingDir);
+    if (!prompt) {
       return;
     }
 
@@ -231,16 +174,286 @@ export class SlackBot {
     }
 
     const channelId = command.channel_id;
-    this.claudeManager.clearSession(channelId);
 
     try {
-      await this.app.client.chat.postMessage({
-        channel: channelId,
-        text: ':broom: Session cleared. Next message will start a new session.',
-      });
+      if (this.isDMChannel(channelId)) {
+        const projectName = this.db.getSlackUserProject(userId);
+        if (!projectName) {
+          await this.app.client.chat.postMessage({
+            channel: channelId,
+            text: 'No project selected. Use `/project <name>` first.',
+          });
+          return;
+        }
+        const sessionKey = `slack:dm:${userId}:${projectName}`;
+        this.claudeManager.clearSession(sessionKey);
+        await this.app.client.chat.postMessage({
+          channel: channelId,
+          text: `:broom: Session cleared for project: \`${projectName}\``,
+        });
+      } else {
+        this.claudeManager.clearSession(channelId);
+        await this.app.client.chat.postMessage({
+          channel: channelId,
+          text: ':broom: Session cleared. Next message will start a new session.',
+        });
+      }
     } catch (error) {
       console.error('Slack: Error sending clear confirmation:', error);
     }
+  }
+
+  private isDMChannel(channelId: string): boolean {
+    return channelId.startsWith('D');
+  }
+
+  private async handleDMMessage(event: any): Promise<void> {
+    const userId = event.user;
+    const channelId = event.channel;
+    const text = (event.text || '').trim();
+
+    // Handle text commands
+    if (text.startsWith('/project')) {
+      await this.handleDMProjectCommand(channelId, userId, text);
+      return;
+    }
+    if (text === '/clear') {
+      const projectName = this.db.getSlackUserProject(userId);
+      if (!projectName) {
+        await this.app.client.chat.postMessage({
+          channel: channelId,
+          text: 'No project selected. Use `/project <name>` first.',
+        });
+        return;
+      }
+      const sessionKey = `slack:dm:${userId}:${projectName}`;
+      this.claudeManager.clearSession(sessionKey);
+      await this.app.client.chat.postMessage({
+        channel: channelId,
+        text: `:broom: Session cleared for project: \`${projectName}\``,
+      });
+      return;
+    }
+    if (text === '/help') {
+      await this.app.client.chat.postMessage({
+        channel: channelId,
+        text: [
+          '*DM Commands:*',
+          '`/project` - List available projects',
+          '`/project <name>` - Set current project',
+          '`/clear` - Clear session for current project',
+          '`/help` - Show this message',
+          '',
+          'Send any other message to run Claude Code on your selected project.',
+        ].join('\n'),
+      });
+      return;
+    }
+
+    // Get selected project
+    const projectName = this.db.getSlackUserProject(userId);
+    if (!projectName) {
+      await this.app.client.chat.postMessage({
+        channel: channelId,
+        text: 'No project selected.\nUse `/project <name>` to set one, or `/project` to see available projects.',
+      });
+      return;
+    }
+
+    // Validate project directory
+    const workingDir = path.join(this.baseFolder, projectName);
+    if (!fs.existsSync(workingDir)) {
+      this.db.deleteSlackUserProject(userId);
+      await this.app.client.chat.postMessage({
+        channel: channelId,
+        text: `Project directory \`${projectName}\` no longer exists. Use \`/project\` to select another.`,
+      });
+      return;
+    }
+
+    // Composite session key for DMs
+    const sessionKey = `slack:dm:${userId}:${projectName}`;
+
+    // Check active process
+    if (this.claudeManager.hasActiveProcess(sessionKey)) {
+      await this.app.client.chat.postMessage({
+        channel: channelId,
+        text: 'A task is already running. Please wait for it to complete.',
+      });
+      return;
+    }
+
+    // Build prompt from text + attachments (reuse same logic as channels)
+    let prompt = await this.buildPromptFromEvent(event, channelId, workingDir);
+    if (!prompt || !prompt.trim()) {
+      return;
+    }
+
+    console.log(`Slack: Received DM from ${userId}, project: ${projectName}`);
+
+    const sessionId = this.claudeManager.getSessionId(sessionKey);
+    const isNewSession = !sessionId;
+
+    try {
+      const statusText = isNewSession
+        ? `:new: *Starting New Session* (\`${projectName}\`)\nInitializing Claude Code...`
+        : `:arrows_counterclockwise: *Continuing Session* (\`${projectName}\`)\n*Session ID:* ${sessionId}\nResuming Claude Code...`;
+
+      await this.app.client.chat.postMessage({
+        channel: channelId,
+        text: statusText,
+      });
+
+      const slackContext = {
+        channelId,
+        channelName: projectName,
+        userId,
+        threadTs: event.thread_ts,
+      };
+
+      this.claudeManager.reserveChannel(sessionKey, sessionId);
+      await this.claudeManager.runClaudeCode(sessionKey, projectName, prompt, sessionId, slackContext, channelId);
+    } catch (error) {
+      console.error('Slack: Error running Claude Code (DM):', error);
+      this.claudeManager.clearSession(sessionKey);
+
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      try {
+        await this.app.client.chat.postMessage({
+          channel: channelId,
+          text: `Error: ${errorMessage}`,
+        });
+      } catch (sendError) {
+        console.error('Slack: Failed to send error message:', sendError);
+      }
+    }
+  }
+
+  private async handleDMProjectCommand(channelId: string, userId: string, text: string): Promise<void> {
+    const parts = text.split(/\s+/);
+    const subcommand = parts[1];
+
+    if (!subcommand || subcommand === 'list') {
+      // List projects
+      let projects: string[] = [];
+      try {
+        projects = fs.readdirSync(this.baseFolder, { withFileTypes: true })
+          .filter(d => d.isDirectory())
+          .map(d => d.name)
+          .sort();
+      } catch {
+        await this.app.client.chat.postMessage({
+          channel: channelId,
+          text: 'Could not read project directory.',
+        });
+        return;
+      }
+
+      const currentProject = this.db.getSlackUserProject(userId);
+      const projectList = projects.length === 0
+        ? 'No projects found.'
+        : projects.map(p => {
+            const marker = p === currentProject ? ':arrow_forward: ' : '    ';
+            return `${marker}\`${p}\``;
+          }).join('\n');
+
+      await this.app.client.chat.postMessage({
+        channel: channelId,
+        text: `:file_folder: *Projects*\n\n${projectList}${currentProject ? `\n\n_Current: \`${currentProject}\`_` : ''}`,
+      });
+      return;
+    }
+
+    // /project <name>
+    const projectName = subcommand;
+    const projectDir = path.join(this.baseFolder, projectName);
+    if (!fs.existsSync(projectDir)) {
+      await this.app.client.chat.postMessage({
+        channel: channelId,
+        text: `Project \`${projectName}\` not found. Use \`/project\` to see available projects.`,
+      });
+      return;
+    }
+
+    this.db.setSlackUserProject(userId, projectName);
+    await this.app.client.chat.postMessage({
+      channel: channelId,
+      text: `:white_check_mark: Project set to: \`${projectName}\``,
+    });
+  }
+
+  private async buildPromptFromEvent(event: any, channelId: string, workingDir: string): Promise<string | null> {
+    const allFiles = event.files || [];
+
+    // Validate and categorize files
+    const rejected: string[] = [];
+    const validFiles: any[] = [];
+    for (const f of allFiles) {
+      const result = validateFile(f.name || 'unknown', f.size || 0);
+      if (!result.allowed) {
+        rejected.push(`${f.name}: ${result.reason}`);
+      } else {
+        validFiles.push({ ...f, _category: result.category });
+      }
+    }
+
+    if (rejected.length > 0) {
+      await this.app.client.chat.postMessage({
+        channel: channelId,
+        text: `Unsupported files:\n${rejected.join('\n')}`,
+      });
+    }
+
+    // Download and save valid files
+    const savedPaths = validFiles.length > 0
+      ? await this.downloadAttachments(validFiles, workingDir)
+      : [];
+
+    // Check for audio files for voice transcription
+    const audioFiles = validFiles.filter((f: any) => f._category === 'audio');
+    let prompt = event.text || '';
+
+    if (audioFiles.length > 0) {
+      const speechmaticsApiKey = process.env.SPEECHMATICS_API_KEY;
+      if (!speechmaticsApiKey) {
+        await this.app.client.chat.postMessage({
+          channel: channelId,
+          text: 'Voice messages are not supported (SPEECHMATICS_API_KEY not set). Please send text.',
+        });
+      } else {
+        const file = audioFiles[0];
+        try {
+          const response = await fetch(file.url_private, {
+            headers: { 'Authorization': `Bearer ${this.config.botToken}` },
+          });
+          if (response.ok) {
+            const buffer = Buffer.from(await response.arrayBuffer());
+            const language = process.env.SPEECHMATICS_LANGUAGE || 'cmn';
+            await this.app.client.chat.postMessage({ channel: channelId, text: 'Transcribing audio...' });
+            const transcribedText = await transcribeAudio(speechmaticsApiKey, buffer, file.name || 'audio.ogg', language);
+            if (transcribedText.trim()) {
+              await this.app.client.chat.postMessage({ channel: channelId, text: `Transcription: "${transcribedText}"` });
+              prompt = transcribedText;
+            } else {
+              await this.app.client.chat.postMessage({ channel: channelId, text: 'Could not transcribe audio (empty result).' });
+            }
+          }
+        } catch (error) {
+          console.error('Slack: Audio transcription error:', error);
+          await this.app.client.chat.postMessage({ channel: channelId, text: 'Failed to transcribe audio.' });
+        }
+      }
+    }
+
+    // Append attachment paths to prompt
+    const nonAudioPaths = savedPaths.filter(p => !audioFiles.some((f: any) => p.includes(f.name)));
+    if (nonAudioPaths.length > 0) {
+      prompt = prompt
+        ? `${prompt}${buildAttachmentPrompt(nonAudioPaths)}`
+        : `[User sent an image]${buildAttachmentPrompt(nonAudioPaths)}`;
+    }
+
+    return prompt.trim() || null;
   }
 
   private async getChannelName(channelId: string): Promise<string> {
