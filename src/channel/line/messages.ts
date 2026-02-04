@@ -292,6 +292,7 @@ export function buildHelpReply(): { type: 'text'; text: string } {
       '/project list - List available projects',
       '/result - Get latest task result',
       '/status - Check running tasks',
+      '/cancel - Cancel the current running task',
       '/clear - Clear session for current project',
       '/help - Show this message',
       '',

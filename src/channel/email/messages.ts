@@ -139,6 +139,7 @@ export function buildHelpEmail(): { subject: string; text: string } {
       'Commands (in email body):',
       '  /result - Get latest task result',
       '  /status - Check running tasks',
+      '  /cancel - Cancel the current running task',
       '  /clear  - Clear session for the project in subject',
       '  /help   - Show this message',
       '',
