@@ -8,7 +8,7 @@ export function escapeShellString(str: string): string {
 }
 
 export interface PlatformBridgeConfig {
-  platform: 'discord' | 'line' | 'slack' | 'telegram' | 'email' | 'webui' | 'teams';
+  platform: 'discord' | 'line' | 'slack' | 'telegram' | 'email' | 'webui';
   mcpServerName: string;
   permissionToolFqn: string;
   allowedToolsPrefix: string;

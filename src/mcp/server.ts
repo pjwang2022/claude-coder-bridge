@@ -8,7 +8,6 @@ import type { SlackPermissionManager } from '../channel/slack/permission-manager
 import type { TelegramPermissionManager } from '../channel/telegram/permission-manager.js';
 import type { EmailPermissionManager } from '../channel/email/permission-manager.js';
 import type { WebUIPermissionManager } from '../channel/webui/permission-manager.js';
-import type { TeamsPermissionManager } from '../channel/teams/permission-manager.js';
 import type { PermissionDecision } from '../shared/permissions.js';
 
 export class MCPPermissionServer {
@@ -21,7 +20,6 @@ export class MCPPermissionServer {
   private telegramPermissionManager?: TelegramPermissionManager;
   private emailPermissionManager?: EmailPermissionManager;
   private webUIPermissionManager?: WebUIPermissionManager;
-  private teamsPermissionManager?: TeamsPermissionManager;
 
   constructor(port: number = 3001) {
     this.port = port;
@@ -328,40 +326,6 @@ export class MCPPermissionServer {
     return undefined;
   }
 
-  // --- Teams Integration ---
-
-  setTeamsPermissionManager(teamsPermissionManager: TeamsPermissionManager): void {
-    this.teamsPermissionManager = teamsPermissionManager;
-  }
-
-  registerTeamsMcpRoute(teamsPermissionManager: TeamsPermissionManager): void {
-    this.app.post('/teams/mcp', this.createMcpHandler(
-      'Claude Code Teams Permission Server',
-      (req) => this.extractTeamsContext(req),
-      (toolName, input, context) => {
-        if (!teamsPermissionManager) {
-          return Promise.resolve({ behavior: 'deny' as const, message: 'Teams permission manager not initialized' });
-        }
-        return teamsPermissionManager.requestApproval(toolName, input, context);
-      },
-    ));
-
-    console.log('Teams MCP route registered: /teams/mcp');
-  }
-
-  private extractTeamsContext(req: express.Request): any | undefined {
-    const userId = req.headers['x-teams-user-id'] as string | undefined;
-    if (userId) {
-      return {
-        userId,
-        conversationId: (req.headers['x-teams-conversation-id'] as string) || 'unknown',
-        serviceUrl: (req.headers['x-teams-service-url'] as string) || 'unknown',
-        projectName: (req.headers['x-teams-project-name'] as string) || 'unknown',
-      };
-    }
-    return undefined;
-  }
-
   // --- LINE Integration ---
 
   setLinePermissionManager(linePermissionManager: LinePermissionManager): void {
@@ -415,7 +379,6 @@ export class MCPPermissionServer {
     this.telegramPermissionManager?.cleanup();
     this.emailPermissionManager?.cleanup();
     this.webUIPermissionManager?.cleanup();
-    this.teamsPermissionManager?.cleanup();
 
     if (this.server) {
       return new Promise((resolve) => {

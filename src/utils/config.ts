@@ -4,7 +4,6 @@ import type { SlackConfig } from '../channel/slack/types.js';
 import type { TelegramConfig } from '../channel/telegram/types.js';
 import type { EmailConfig } from '../channel/email/types.js';
 import type { WebUIConfig } from '../channel/webui/types.js';
-import type { TeamsConfig } from '../channel/teams/types.js';
 
 export function validateConfig(): Config {
   const baseFolder = process.env.BASE_FOLDER;
@@ -129,21 +128,3 @@ export function getProcessTimeoutMs(): number {
   return parseInt(process.env.CLAUDE_PROCESS_TIMEOUT || '300') * 1000;
 }
 
-export function validateTeamsConfig(): TeamsConfig | null {
-  const appId = process.env.TEAMS_APP_ID;
-  const appPassword = process.env.TEAMS_APP_PASSWORD;
-
-  if (!appId || !appPassword) {
-    return null;
-  }
-
-  const allowedUserIds = process.env.TEAMS_ALLOWED_USER_IDS;
-
-  return {
-    appId,
-    appPassword,
-    allowedUserIds: allowedUserIds
-      ? allowedUserIds.split(',').map(id => id.trim()).filter(Boolean)
-      : [],
-  };
-}

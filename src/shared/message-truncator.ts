@@ -13,7 +13,6 @@ export const PLATFORM_LIMITS: Record<string, number> = {
   line: 1400,
   telegram: 2900,
   email: 5000,
-  teams: 900,
 };
 
 const TRUNCATION_NOTICE = '\n\n---\n⚠ Response truncated. Full result saved to .claude-result.md';

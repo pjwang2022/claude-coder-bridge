@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { DiscordBot } from './channel/discord/client.js';
 import { ClaudeManager } from './channel/discord/manager.js';
-import { validateConfig, validateLineConfig, validateSlackConfig, validateTelegramConfig, validateEmailConfig, validateWebUIConfig, validateTeamsConfig as validateTeamsConfigFn } from './utils/config.js';
+import { validateConfig, validateLineConfig, validateSlackConfig, validateTelegramConfig, validateEmailConfig, validateWebUIConfig } from './utils/config.js';
 import { MCPPermissionServer } from './mcp/server.js';
 import { LINEClaudeManager } from './channel/line/manager.js';
 import { LineBotHandler } from './channel/line/bot.js';
@@ -18,9 +18,6 @@ import { EmailPermissionManager } from './channel/email/permission-manager.js';
 import { WebUIServer } from './channel/webui/client.js';
 import { WebUIClaudeManager } from './channel/webui/manager.js';
 import { WebUIPermissionManager } from './channel/webui/permission-manager.js';
-import { TeamsBot } from './channel/teams/client.js';
-import { TeamsClaudeManager } from './channel/teams/manager.js';
-import { TeamsPermissionManager } from './channel/teams/permission-manager.js';
 
 async function main() {
   const config = validateConfig();
@@ -29,10 +26,8 @@ async function main() {
   const telegramConfig = validateTelegramConfig();
   const emailConfig = validateEmailConfig();
   const webUIConfig = validateWebUIConfig();
-  const teamsConfig = validateTeamsConfigFn();
-
-  if (!config.discord && !lineConfig && !slackConfig && !telegramConfig && !emailConfig && !webUIConfig && !teamsConfig) {
-    console.error('No platform configured. Set DISCORD_TOKEN + ALLOWED_USER_ID for Discord, LINE_CHANNEL_ACCESS_TOKEN + LINE_CHANNEL_SECRET for LINE, SLACK_BOT_TOKEN + SLACK_APP_TOKEN + SLACK_SIGNING_SECRET for Slack, TELEGRAM_BOT_TOKEN for Telegram, EMAIL_USER + EMAIL_PASS for Email, WEB_UI_ENABLED=true for Web UI, or TEAMS_APP_ID + TEAMS_APP_PASSWORD for Teams.');
+  if (!config.discord && !lineConfig && !slackConfig && !telegramConfig && !emailConfig && !webUIConfig) {
+    console.error('No platform configured. Set DISCORD_TOKEN + ALLOWED_USER_ID for Discord, LINE_CHANNEL_ACCESS_TOKEN + LINE_CHANNEL_SECRET for LINE, SLACK_BOT_TOKEN + SLACK_APP_TOKEN + SLACK_SIGNING_SECRET for Slack, TELEGRAM_BOT_TOKEN for Telegram, EMAIL_USER + EMAIL_PASS for Email, or WEB_UI_ENABLED=true for Web UI.');
     process.exit(1);
   }
 
@@ -156,27 +151,6 @@ async function main() {
     console.log('Web UI initialized.');
   }
 
-  // Optional: Microsoft Teams Bot
-  let teamsBot: TeamsBot | undefined;
-  let teamsClaudeManager: TeamsClaudeManager | undefined;
-
-  if (teamsConfig) {
-    console.log('Initializing Teams Bot...');
-
-    const teamsPermissionManager = new TeamsPermissionManager();
-    teamsClaudeManager = new TeamsClaudeManager(config.baseFolder);
-    teamsBot = new TeamsBot(teamsConfig, teamsClaudeManager, teamsPermissionManager, config.baseFolder);
-
-    teamsBot.registerRoutes(mcpServer.getExpressApp());
-    teamsPermissionManager.setAdapter(teamsBot.adapter);
-    teamsClaudeManager.setAdapter(teamsBot.adapter);
-
-    mcpServer.setTeamsPermissionManager(teamsPermissionManager);
-    mcpServer.registerTeamsMcpRoute(teamsPermissionManager);
-
-    console.log('Teams Bot initialized.');
-  }
-
   // Handle graceful shutdown
   const shutdown = async () => {
     console.log('Shutting down gracefully...');
@@ -242,12 +216,6 @@ async function main() {
       console.error('Error stopping Web UI:', error);
     }
 
-    try {
-      teamsClaudeManager?.destroy();
-    } catch (error) {
-      console.error('Error stopping Teams Claude manager:', error);
-    }
-
     process.exit(0);
   };
 
@@ -304,9 +272,6 @@ async function main() {
   }
   if (webUIConfig) {
     console.log(`Web UI is ready at http://localhost:${mcpPort}/`);
-  }
-  if (teamsConfig) {
-    console.log(`Teams Bot is ready. Messaging endpoint: https://<your-domain>:${mcpPort}/teams/messages`);
   }
 }
 

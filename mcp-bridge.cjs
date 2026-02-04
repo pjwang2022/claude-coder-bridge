@@ -57,15 +57,6 @@ const PLATFORM_CONFIG = {
       { env: 'WEBUI_PROJECT', header: 'X-WebUI-Project' },
     ],
   },
-  teams: {
-    path: '/teams/mcp',
-    headers: [
-      { env: 'TEAMS_USER_ID', header: 'X-Teams-User-Id' },
-      { env: 'TEAMS_CONVERSATION_ID', header: 'X-Teams-Conversation-Id' },
-      { env: 'TEAMS_SERVICE_URL', header: 'X-Teams-Service-Url' },
-      { env: 'TEAMS_PROJECT_NAME', header: 'X-Teams-Project-Name' },
-    ],
-  },
 };
 
 const config = PLATFORM_CONFIG[PLATFORM];

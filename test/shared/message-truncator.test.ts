@@ -27,7 +27,6 @@ describe('message-truncator', () => {
       expect(PLATFORM_LIMITS.line).toBe(1400);
       expect(PLATFORM_LIMITS.telegram).toBe(2900);
       expect(PLATFORM_LIMITS.email).toBe(5000);
-      expect(PLATFORM_LIMITS.teams).toBe(900);
     });
 
     it('should include common platforms', () => {
@@ -119,12 +118,9 @@ describe('message-truncator', () => {
 
         const discordResult = truncateWithSave(text, 'discord', tempDir);
         const lineResult = truncateWithSave(text, 'line', tempDir);
-        const teamsResult = truncateWithSave(text, 'teams', tempDir);
 
         // Discord has higher limit than LINE
         expect(discordResult.text.length).toBeGreaterThan(lineResult.text.length);
-        // LINE has higher limit than Teams
-        expect(lineResult.text.length).toBeGreaterThan(teamsResult.text.length);
       });
 
       it('should account for truncation notice length', () => {

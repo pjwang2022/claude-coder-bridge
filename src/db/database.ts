@@ -3,7 +3,6 @@ import * as path from "path";
 import type { LineTaskResult, LineUserProject, TaskStatus } from "../channel/line/types.js";
 import type { TelegramTaskResult, TaskStatus as TelegramTaskStatus } from "../channel/telegram/types.js";
 import type { EmailTaskResult, TaskStatus as EmailTaskStatus } from "../channel/email/types.js";
-import type { TeamsTaskResult, TaskStatus as TeamsTaskStatus } from "../channel/teams/types.js";
 
 export interface WebUIChatMessage {
   id: number;
@@ -129,37 +128,6 @@ export class DatabaseManager {
     this.db.exec(`
       CREATE INDEX IF NOT EXISTS idx_email_task_results_user_status
       ON email_task_results(user_email, status)
-    `);
-
-    // Teams: user project selection
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS teams_user_projects (
-        user_id TEXT PRIMARY KEY,
-        project_name TEXT NOT NULL,
-        updated_at INTEGER NOT NULL
-      )
-    `);
-
-    // Teams: task results for async retrieval
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS teams_task_results (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id TEXT NOT NULL,
-        project_name TEXT NOT NULL,
-        session_id TEXT,
-        status TEXT NOT NULL DEFAULT 'running',
-        prompt TEXT NOT NULL,
-        result TEXT,
-        conversation_id TEXT NOT NULL,
-        service_url TEXT NOT NULL,
-        created_at INTEGER NOT NULL,
-        completed_at INTEGER
-      )
-    `);
-
-    this.db.exec(`
-      CREATE INDEX IF NOT EXISTS idx_teams_task_results_user_status
-      ON teams_task_results(user_id, status)
     `);
 
     // WebUI: sessions per project
@@ -618,89 +586,4 @@ export class DatabaseManager {
     };
   }
 
-  // --- Teams: User Project Management ---
-
-  getTeamsUserProject(userId: string): string | undefined {
-    const stmt = this.db.prepare("SELECT project_name FROM teams_user_projects WHERE user_id = ?");
-    const result = stmt.get(userId) as { project_name: string } | null;
-    return result?.project_name;
-  }
-
-  setTeamsUserProject(userId: string, projectName: string): void {
-    const stmt = this.db.prepare(`
-      INSERT OR REPLACE INTO teams_user_projects (user_id, project_name, updated_at)
-      VALUES (?, ?, ?)
-    `);
-    stmt.run(userId, projectName, Date.now());
-  }
-
-  deleteTeamsUserProject(userId: string): void {
-    const stmt = this.db.prepare("DELETE FROM teams_user_projects WHERE user_id = ?");
-    stmt.run(userId);
-  }
-
-  // --- Teams: Task Results ---
-
-  createTeamsTask(userId: string, projectName: string, prompt: string, conversationId: string, serviceUrl: string): number {
-    const stmt = this.db.prepare(`
-      INSERT INTO teams_task_results (user_id, project_name, status, prompt, conversation_id, service_url, created_at)
-      VALUES (?, ?, 'running', ?, ?, ?, ?)
-    `);
-    const result = stmt.run(userId, projectName, prompt, conversationId, serviceUrl, Date.now());
-    return Number(result.lastInsertRowid);
-  }
-
-  updateTeamsTaskStatus(taskId: number, status: TeamsTaskStatus, result?: string, sessionId?: string): void {
-    const completedAt = status === 'completed' || status === 'failed' ? Date.now() : null;
-    const stmt = this.db.prepare(`
-      UPDATE teams_task_results
-      SET status = ?, result = COALESCE(?, result), session_id = COALESCE(?, session_id), completed_at = COALESCE(?, completed_at)
-      WHERE id = ?
-    `);
-    stmt.run(status, result ?? null, sessionId ?? null, completedAt, taskId);
-  }
-
-  getLatestTeamsTask(userId: string): TeamsTaskResult | undefined {
-    const stmt = this.db.prepare(
-      "SELECT * FROM teams_task_results WHERE user_id = ? ORDER BY created_at DESC LIMIT 1"
-    );
-    const row = stmt.get(userId) as any;
-    if (!row) return undefined;
-    return this.mapTeamsTaskRow(row);
-  }
-
-  getRunningTeamsTasks(userId: string): TeamsTaskResult[] {
-    const stmt = this.db.prepare(
-      "SELECT * FROM teams_task_results WHERE user_id = ? AND status = 'running' ORDER BY created_at DESC"
-    );
-    const rows = stmt.all(userId) as any[];
-    return rows.map(row => this.mapTeamsTaskRow(row));
-  }
-
-  cleanupOldTeamsTasks(): void {
-    const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
-    const stmt = this.db.prepare(
-      "DELETE FROM teams_task_results WHERE status != 'running' AND created_at < ?"
-    );
-    const result = stmt.run(sevenDaysAgo);
-    if (result.changes > 0) {
-      console.log(`Cleaned up ${result.changes} old Teams tasks`);
-    }
-  }
-
-  private mapTeamsTaskRow(row: any): TeamsTaskResult {
-    return {
-      id: row.id,
-      userId: row.user_id,
-      projectName: row.project_name,
-      sessionId: row.session_id,
-      status: row.status,
-      prompt: row.prompt,
-      result: row.result,
-      conversationId: row.conversation_id,
-      serviceUrl: row.service_url,
-      createdAt: row.created_at,
-      completedAt: row.completed_at,
-    };
-  }
 }
