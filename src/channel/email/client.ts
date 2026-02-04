@@ -36,16 +36,7 @@ export class EmailBot {
     this.allowedSenders = config.allowedSenders;
     this.db = new DatabaseManager();
 
-    this.imap = new ImapFlow({
-      host: config.imapHost,
-      port: config.imapPort,
-      secure: true,
-      auth: {
-        user: config.emailUser,
-        pass: config.emailPass,
-      },
-      logger: false,
-    });
+    this.imap = this.createImapClient();
 
     this.transporter = nodemailer.createTransport({
       host: config.smtpHost,
@@ -58,13 +49,27 @@ export class EmailBot {
     });
   }
 
-  async start(): Promise<void> {
-    this.running = true;
+  private createImapClient(): ImapFlow {
+    const client = new ImapFlow({
+      host: this.config.imapHost,
+      port: this.config.imapPort,
+      secure: true,
+      auth: {
+        user: this.config.emailUser,
+        pass: this.config.emailPass,
+      },
+      logger: false,
+    });
 
-    // Prevent unhandled 'error' events from crashing the process
-    this.imap.on('error', (err: Error) => {
+    client.on('error', (err: Error) => {
       console.error('Email bot: IMAP error event:', err.message);
     });
+
+    return client;
+  }
+
+  async start(): Promise<void> {
+    this.running = true;
 
     await this.imap.connect();
     console.log('Email bot: IMAP connected.');
@@ -89,9 +94,10 @@ export class EmailBot {
     while (this.running) {
       let lock;
       try {
-        // Ensure connected
+        // Ensure connected — create a fresh instance if the old one is dead
         if (!this.imap.usable) {
           console.log('Email bot: Reconnecting IMAP...');
+          this.imap = this.createImapClient();
           try { await this.imap.connect(); } catch (err) {
             console.error('Email bot: Reconnect failed:', (err as Error).message);
             await this.sleep(10000);
