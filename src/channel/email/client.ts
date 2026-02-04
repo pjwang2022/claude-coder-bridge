@@ -59,6 +59,8 @@ export class EmailBot {
         pass: this.config.emailPass,
       },
       logger: false,
+      // Restart IDLE every 2 min to prevent NAT/firewall/server timeouts
+      maxIdleTime: 2 * 60 * 1000,
     });
 
     client.on('error', (err: Error) => {
@@ -90,73 +92,115 @@ export class EmailBot {
     this.transporter.close();
   }
 
+  private async ensureConnected(): Promise<boolean> {
+    if (this.imap.usable) return true;
+
+    console.log('Email bot: Reconnecting IMAP...');
+    this.imap = this.createImapClient();
+    try {
+      await this.imap.connect();
+      console.log('Email bot: IMAP reconnected.');
+      return true;
+    } catch (err) {
+      console.error('Email bot: Reconnect failed:', (err as Error).message);
+      return false;
+    }
+  }
+
   private async listenLoop(): Promise<void> {
+    const POLL_INTERVAL = 30_000; // Poll every 30s as IDLE fallback
+    const RECONNECT_DELAY = 5_000;
+
     while (this.running) {
+      // Step 1: Ensure connection
+      if (!await this.ensureConnected()) {
+        await this.sleep(RECONNECT_DELAY);
+        continue;
+      }
+
       let lock;
       try {
-        // Ensure connected — create a fresh instance if the old one is dead
-        if (!this.imap.usable) {
-          console.log('Email bot: Reconnecting IMAP...');
-          this.imap = this.createImapClient();
-          try { await this.imap.connect(); } catch (err) {
-            console.error('Email bot: Reconnect failed:', (err as Error).message);
-            await this.sleep(10000);
-            continue;
-          }
-          console.log('Email bot: IMAP reconnected.');
-        }
-
         lock = await this.imap.getMailboxLock('INBOX');
+      } catch (err) {
+        console.error('Email bot: Failed to lock INBOX:', (err as Error).message);
+        await this.sleep(RECONNECT_DELAY);
+        continue;
+      }
 
-        // Process any existing unseen messages first
+      try {
+        // Step 2: Process existing unseen messages
         await this.processUnseenMessages();
 
-        // IDLE loop: wait for new messages
-        while (this.running) {
+        // Step 3: IDLE loop with polling fallback
+        console.log('Email bot: Entering IDLE mode, waiting for new messages...');
+        while (this.running && this.imap.usable) {
           try {
-            await this.imap.idle();
+            // Race IDLE against a timeout — ensures we poll even if IDLE doesn't fire
+            await Promise.race([
+              this.imap.idle(),
+              this.sleep(POLL_INTERVAL),
+            ]);
           } catch (err) {
             if (!this.running) break;
             console.error('Email bot: IDLE error:', (err as Error).message);
-            break; // break inner loop to reconnect
+            break;
+          }
+
+          // Check connection health before processing
+          if (!this.imap.usable) {
+            console.log('Email bot: Connection lost, will reconnect...');
+            break;
           }
 
           await this.processUnseenMessages();
+
+          // Check again after processing (connection may have dropped mid-fetch)
+          if (!this.imap.usable) {
+            console.log('Email bot: Connection lost during message processing, will reconnect...');
+            break;
+          }
         }
       } catch (err) {
         if (!this.running) break;
-        console.error('Email bot: Listen loop error, will retry:', (err as Error).message);
+        console.error('Email bot: Listen loop error:', (err as Error).message);
       } finally {
         try { lock?.release(); } catch { /* ignore */ }
       }
 
       if (this.running) {
-        console.log('Email bot: Waiting 10s before reconnect...');
-        await this.sleep(10000);
+        await this.sleep(RECONNECT_DELAY);
       }
     }
   }
 
   private async processUnseenMessages(): Promise<void> {
     try {
+      console.log('Email bot: Checking for unseen messages...');
       const messages = this.imap.fetch({ seen: false }, {
         envelope: true,
         source: true,
         uid: true,
       });
 
+      let count = 0;
       for await (const msg of messages) {
+        count++;
+        console.log(`Email bot: Found unseen message UID=${msg.uid}, subject="${msg.envelope?.subject}"`);
         try {
           // Mark as seen immediately
           await this.imap.messageFlagsAdd({ uid: msg.uid }, ['\\Seen'], { uid: true });
 
-          if (!msg.source) continue;
+          if (!msg.source) {
+            console.log('Email bot: Message has no source, skipping');
+            continue;
+          }
           const parsed = await simpleParser(msg.source);
           await this.handleEmail(parsed);
         } catch (error) {
           console.error('Email bot: Error processing message:', error);
         }
       }
+      console.log(`Email bot: Processed ${count} unseen message(s)`);
     } catch (error) {
       console.error('Email bot: Error fetching unseen messages:', error);
     }
@@ -164,17 +208,26 @@ export class EmailBot {
 
   private async handleEmail(parsed: any): Promise<void> {
     const from = parsed.from?.value?.[0]?.address?.toLowerCase();
-    if (!from) return;
+    console.log(`Email bot: handleEmail — from=${from}, subject="${parsed.subject}", botEmail=${this.botEmail}`);
 
-    // Skip our own emails
-    if (from === this.botEmail.toLowerCase()) return;
-
-    // Auth check
-    if (this.allowedSenders.length > 0 && !this.allowedSenders.includes(from)) {
-      console.log(`Email bot: Unauthorized sender: ${from}`);
+    if (!from) {
+      console.log('Email bot: No sender address found, skipping');
       return;
     }
 
+    // Skip our own emails
+    if (from === this.botEmail.toLowerCase()) {
+      console.log('Email bot: Skipping own email');
+      return;
+    }
+
+    // Auth check
+    if (this.allowedSenders.length > 0 && !this.allowedSenders.includes(from)) {
+      console.log(`Email bot: Unauthorized sender: ${from} (allowed: ${this.allowedSenders.join(', ')})`);
+      return;
+    }
+
+    console.log(`Email bot: Processing email from ${from}`);
     const subject = parsed.subject || '';
     const messageId = parsed.messageId || '';
     const body = (parsed.text || '').trim();
