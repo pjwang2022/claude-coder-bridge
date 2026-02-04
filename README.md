@@ -2,7 +2,7 @@
 
 [繁體中文](README.zh-TW.md) | English
 
-Run [Claude Code](https://docs.anthropic.com/en/docs/claude-code) sessions from Discord, LINE, Slack, Telegram, Email, Web UI, or Microsoft Teams. Each platform maps messages to project folders on your filesystem, with interactive tool approval, session persistence, and real-time streaming.
+Run [Claude Code](https://docs.anthropic.com/en/docs/claude-code) sessions from Discord, LINE, Slack, Telegram, Email, or Web UI. Each platform maps messages to project folders on your filesystem, with interactive tool approval, session persistence, and real-time streaming.
 
 ![image](https://github.com/user-attachments/assets/d78c6dcd-eb28-48b6-be1c-74e25935b86b)
 
@@ -16,7 +16,6 @@ Run [Claude Code](https://docs.anthropic.com/en/docs/claude-code) sessions from 
 | **Telegram** | Long Polling | `/project <name>` command | Inline keyboard | Images, Voice |
 | **Email** | IMAP IDLE | Subject tag `[project-name]` | Clickable link | Image attachments |
 | **Web UI** | WebSocket | Dropdown selector | In-browser modal | - |
-| **Teams** | Webhook | `/project <name>` command | Adaptive Card buttons | - |
 
 You can enable any combination of platforms simultaneously. At least one platform must be configured.
 
@@ -42,7 +41,7 @@ You can enable any combination of platforms simultaneously. At least one platfor
 ## How It Works
 
 ```
-User Message (Discord / LINE / Slack / Telegram / Email / Web UI / Teams)
+User Message (Discord / LINE / Slack / Telegram / Email / Web UI)
     |
     v
 Bot parses message, determines project folder
@@ -71,7 +70,7 @@ Results streamed back to user via platform API
 
 **Synchronous** (Discord, Slack, Web UI): One Claude process per channel/connection. Messages queue if a process is already running. Sessions persist and resume across messages.
 
-**Asynchronous** (LINE, Telegram, Email, Teams): Tasks run in the background. Users can send new messages while tasks are running. Results are delivered as push notifications when complete.
+**Asynchronous** (LINE, Telegram, Email): Tasks run in the background. Users can send new messages while tasks are running. Results are delivered as push notifications when complete.
 
 ## Platform Setup
 
@@ -278,48 +277,16 @@ WEB_UI_PASSWORD=your_secret_password   # Optional: leave unset for no auth
 
 ---
 
-### Microsoft Teams
-
-Create a bot at the [Azure Bot Framework](https://dev.botframework.com/):
-
-1. Register a new bot in Azure Portal > Bot Services
-2. Note the **App ID** and create an **App Password** (client secret)
-3. Set the messaging endpoint to `https://<your-domain>:3001/teams/messages`
-
-```env
-TEAMS_APP_ID=your_azure_bot_app_id
-TEAMS_APP_PASSWORD=your_azure_bot_app_password
-TEAMS_ALLOWED_USER_IDS=aad-object-id-1,aad-object-id-2   # Optional: restrict access
-```
-
-**Usage**: Chat with the bot in Teams. Select a project first, then send prompts.
-
-| Command | Description |
-|---------|-------------|
-| `/project` | List available projects |
-| `/project <name>` | Select a project |
-| `/result` | Get the latest task result |
-| `/status` | Check running tasks |
-| `/clear` | Clear the session for the current project |
-| `/help` | Show help |
-| Any message | Run Claude Code (requires project selected) |
-
-**Approval**: Bot sends an Adaptive Card with Approve / Deny buttons. Timeout: 5 minutes.
-
-**Note**: Teams requires a public HTTPS URL for the messaging endpoint. You need a reverse proxy or tunnel (e.g., ngrok) pointing to port 3001.
-
----
-
 ## Voice Transcription (Speechmatics)
 
 LINE and Telegram support voice messages. To enable transcription, add a [Speechmatics](https://www.speechmatics.com/) API key:
 
 ```env
 SPEECHMATICS_API_KEY=your_api_key
-SPEECHMATICS_LANGUAGE=zh    # Language code (default: zh)
+SPEECHMATICS_LANGUAGE=cmn    # Language code (default: cmn). Use cmn_en for Mandarin & English bilingual.
 ```
 
-Supported languages: `en`, `zh`, `ja`, `ko`, `fr`, `de`, `es`, and [many more](https://docs.speechmatics.com/introduction/supported-languages).
+Supported languages: `en`, `cmn`, `cmn_en`, `ja`, `ko`, `fr`, `de`, `es`, and [many more](https://docs.speechmatics.com/speech-to-text/languages).
 
 Voice messages are transcribed to text and then passed to Claude Code as the prompt.
 
@@ -346,7 +313,6 @@ When approval is needed, the bot sends a platform-native prompt and waits for th
 | Telegram | Inline keyboard | 5 min |
 | Email | HTTP link click | 5 min |
 | Web UI | Browser modal | 2 min |
-| Teams | Adaptive Card buttons | 5 min |
 
 ## Advanced Configuration
 
@@ -371,9 +337,6 @@ EMAIL_APPROVAL_TIMEOUT=300
 
 # WebUI approval timeout in seconds (default: 120)
 WEBUI_APPROVAL_TIMEOUT=120
-
-# Teams approval timeout in seconds (default: 300)
-TEAMS_APPROVAL_TIMEOUT=300
 ```
 
 ## Development
@@ -399,8 +362,7 @@ src/
     ├── slack/                # Slack Bolt bot (Socket Mode)
     ├── telegram/             # Telegraf bot (Long Polling)
     ├── email/                # IMAP IDLE + SMTP
-    ├── webui/                # WebSocket + static HTML
-    └── teams/                # Bot Framework (Webhook)
+    └── webui/                # WebSocket + static HTML
 ```
 
 Each channel directory contains:

@@ -2,7 +2,7 @@
 
 繁體中文 | [English](README.md)
 
-透過 Discord、LINE、Slack、Telegram、Email、Web UI 或 Microsoft Teams 執行 [Claude Code](https://docs.anthropic.com/en/docs/claude-code) 工作階段。每個平台將訊息對應到你檔案系統上的專案資料夾，支援互動式工具審批、工作階段持久化，以及即時串流輸出。
+透過 Discord、LINE、Slack、Telegram、Email 或 Web UI 執行 [Claude Code](https://docs.anthropic.com/en/docs/claude-code) 工作階段。每個平台將訊息對應到你檔案系統上的專案資料夾，支援互動式工具審批、工作階段持久化，以及即時串流輸出。
 
 ![image](https://github.com/user-attachments/assets/d78c6dcd-eb28-48b6-be1c-74e25935b86b)
 
@@ -16,7 +16,6 @@
 | **Telegram** | Long Polling | `/project <名稱>` 指令 | Inline 鍵盤按鈕 | 圖片、語音 |
 | **Email** | IMAP IDLE | 主旨標籤 `[project-name]` | 點擊連結 | 圖片附件 |
 | **Web UI** | WebSocket | 下拉選單 | 瀏覽器彈窗 | - |
-| **Teams** | Webhook | `/project <名稱>` 指令 | Adaptive Card 按鈕 | - |
 
 可同時啟用任意平台組合，至少需要設定一個平台。
 
@@ -42,7 +41,7 @@
 ## 運作原理
 
 ```
-使用者訊息（Discord / LINE / Slack / Telegram / Email / Web UI / Teams）
+使用者訊息（Discord / LINE / Slack / Telegram / Email / Web UI）
     |
     v
 Bot 解析訊息，決定專案資料夾
@@ -71,7 +70,7 @@ Claude Code 在 BASE_FOLDER/{project-name}/ 中執行
 
 **同步模式**（Discord、Slack、Web UI）：每個頻道/連線一個 Claude 程序。程序執行中時新訊息會排隊等待。工作階段會跨訊息持久化並自動恢復。
 
-**非同步模式**（LINE、Telegram、Email、Teams）：任務在背景執行。使用者可在任務執行期間繼續傳送新訊息。任務完成後以推播通知方式送回結果。
+**非同步模式**（LINE、Telegram、Email）：任務在背景執行。使用者可在任務執行期間繼續傳送新訊息。任務完成後以推播通知方式送回結果。
 
 ## 平台設定
 
@@ -278,48 +277,16 @@ WEB_UI_PASSWORD=your_secret_password   # 選填：不設定則無需密碼
 
 ---
 
-### Microsoft Teams
-
-在 [Azure Bot Framework](https://dev.botframework.com/) 建立機器人：
-
-1. 在 Azure Portal > Bot Services 註冊新的機器人
-2. 記下 **App ID** 並建立 **App Password**（client secret）
-3. 設定 messaging endpoint 為 `https://<your-domain>:3001/teams/messages`
-
-```env
-TEAMS_APP_ID=your_azure_bot_app_id
-TEAMS_APP_PASSWORD=your_azure_bot_app_password
-TEAMS_ALLOWED_USER_IDS=aad-object-id-1,aad-object-id-2   # 選填：限制可使用的使用者
-```
-
-**使用方式**：在 Teams 中與機器人聊天。先選擇專案，再傳送 prompt。
-
-| 指令 | 說明 |
-|------|------|
-| `/project` | 列出可用專案 |
-| `/project <名稱>` | 選擇專案 |
-| `/result` | 取得最新任務結果 |
-| `/status` | 查看執行中的任務 |
-| `/clear` | 清除當前專案的工作階段 |
-| `/help` | 顯示說明 |
-| 任何訊息 | 以該訊息作為 prompt 執行 Claude Code（需先選擇專案）|
-
-**審批**：機器人送出 Adaptive Card，包含 Approve / Deny 按鈕。逾時：5 分鐘。
-
-**注意**：Teams 需要公開 HTTPS URL 作為 messaging endpoint。你需要反向代理或通道（例如 ngrok）指向 port 3001。
-
----
-
 ## 語音轉文字（Speechmatics）
 
 LINE 和 Telegram 支援語音訊息。若要啟用語音轉文字，請加入 [Speechmatics](https://www.speechmatics.com/) API key：
 
 ```env
 SPEECHMATICS_API_KEY=your_api_key
-SPEECHMATICS_LANGUAGE=zh    # 語言代碼（預設：zh）
+SPEECHMATICS_LANGUAGE=cmn    # 語言代碼（預設：cmn）。中英雙語可用 cmn_en。
 ```
 
-支援的語言：`en`、`zh`、`ja`、`ko`、`fr`、`de`、`es`，以及[更多語言](https://docs.speechmatics.com/introduction/supported-languages)。
+支援的語言：`en`、`cmn`、`cmn_en`、`ja`、`ko`、`fr`、`de`、`es`，以及[更多語言](https://docs.speechmatics.com/speech-to-text/languages)。
 
 語音訊息會先轉譯為文字，再作為 prompt 傳給 Claude Code。
 
@@ -346,7 +313,6 @@ Claude Code 使用各種工具（讀取檔案、寫入檔案、執行指令等�
 | Telegram | Inline 鍵盤按鈕 | 5 分鐘 |
 | Email | HTTP 連結點擊 | 5 分鐘 |
 | Web UI | 瀏覽器彈窗 | 2 分鐘 |
-| Teams | Adaptive Card 按鈕 | 5 分鐘 |
 
 ## 進階設定
 
@@ -371,9 +337,6 @@ EMAIL_APPROVAL_TIMEOUT=300
 
 # WebUI 審批逾時秒數（預設：120）
 WEBUI_APPROVAL_TIMEOUT=120
-
-# Teams 審批逾時秒數（預設：300）
-TEAMS_APPROVAL_TIMEOUT=300
 ```
 
 ## 開發
@@ -399,8 +362,7 @@ src/
     ├── slack/                # Slack Bolt 機器人（Socket Mode）
     ├── telegram/             # Telegraf 機器人（Long Polling）
     ├── email/                # IMAP IDLE + SMTP
-    ├── webui/                # WebSocket + 靜態 HTML
-    └── teams/                # Bot Framework（Webhook）
+    └── webui/                # WebSocket + 靜態 HTML
 ```
 
 每個 channel 目錄包含：
