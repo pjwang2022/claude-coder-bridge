@@ -174,21 +174,45 @@ export class EmailBot {
   }
 
   private async processUnseenMessages(): Promise<void> {
+    const IMAP_OP_TIMEOUT = 15_000;
+
     try {
       console.log('Email bot: Checking for unseen messages...');
+
+      // Collect messages first with a timeout to avoid hanging on dead connections
+      const collected: Array<{ uid: number; source: Buffer | undefined; envelope: any }> = [];
       const messages = this.imap.fetch({ seen: false }, {
         envelope: true,
         source: true,
         uid: true,
       });
 
-      let count = 0;
-      for await (const msg of messages) {
-        count++;
-        console.log(`Email bot: Found unseen message UID=${msg.uid}, subject="${msg.envelope?.subject}"`);
+      try {
+        await this.withTimeout(
+          (async () => {
+            for await (const msg of messages) {
+              collected.push({ uid: msg.uid, source: msg.source, envelope: msg.envelope });
+            }
+          })(),
+          IMAP_OP_TIMEOUT,
+          'IMAP fetch',
+        );
+      } catch (err) {
+        console.error('Email bot: Error fetching messages:', (err as Error).message);
+        // Process whatever we collected before the error
+      }
+
+      console.log(`Email bot: Found ${collected.length} unseen message(s)`);
+
+      for (const msg of collected) {
+        console.log(`Email bot: Processing UID=${msg.uid}, subject="${msg.envelope?.subject}"`);
         try {
-          // Mark as seen immediately
-          await this.imap.messageFlagsAdd({ uid: msg.uid }, ['\\Seen'], { uid: true });
+          // Mark as seen with timeout
+          await this.withTimeout(
+            this.imap.messageFlagsAdd({ uid: msg.uid }, ['\\Seen'], { uid: true }),
+            IMAP_OP_TIMEOUT,
+            'messageFlagsAdd',
+          );
 
           if (!msg.source) {
             console.log('Email bot: Message has no source, skipping');
@@ -197,12 +221,12 @@ export class EmailBot {
           const parsed = await simpleParser(msg.source);
           await this.handleEmail(parsed);
         } catch (error) {
-          console.error('Email bot: Error processing message:', error);
+          console.error('Email bot: Error processing message:', (error as Error).message);
         }
       }
-      console.log(`Email bot: Processed ${count} unseen message(s)`);
+      console.log(`Email bot: Processed ${collected.length} message(s)`);
     } catch (error) {
-      console.error('Email bot: Error fetching unseen messages:', error);
+      console.error('Email bot: Error in processUnseenMessages:', error);
     }
   }
 
@@ -415,5 +439,15 @@ export class EmailBot {
 
   private sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  private withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+      promise.then(
+        (val) => { clearTimeout(timer); resolve(val); },
+        (err) => { clearTimeout(timer); reject(err); },
+      );
+    });
   }
 }
