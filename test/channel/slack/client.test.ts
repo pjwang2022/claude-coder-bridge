@@ -21,6 +21,9 @@ vi.mock('@slack/bolt', () => ({
     start: vi.fn().mockResolvedValue(undefined),
     stop: vi.fn().mockResolvedValue(undefined),
   })),
+  SocketModeReceiver: vi.fn().mockImplementation(() => ({
+    client: {},
+  })),
 }));
 
 vi.mock('better-sqlite3', () => ({

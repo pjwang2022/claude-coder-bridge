@@ -1,6 +1,6 @@
 import * as path from 'path';
 import * as fs from 'fs';
-import { App } from '@slack/bolt';
+import { App, SocketModeReceiver } from '@slack/bolt';
 import type { SlackConfig } from './types.js';
 import type { SlackClaudeManager } from './manager.js';
 import type { SlackPermissionManager } from './permission-manager.js';
@@ -21,11 +21,18 @@ export class SlackBot {
     private baseFolder: string,
   ) {
     this.db = new DatabaseManager();
+
+    const receiver = new SocketModeReceiver({
+      appToken: config.appToken,
+    });
+    // Increase ping/pong timeout from default 5s to 30s to avoid
+    // "A pong wasn't received from the server before the timeout" warnings
+    (receiver.client as any).clientPingTimeoutMS = 30000;
+
     this.app = new App({
       token: config.botToken,
-      appToken: config.appToken,
       signingSecret: config.signingSecret,
-      socketMode: true,
+      receiver,
     });
 
     this.setupEventHandlers();
