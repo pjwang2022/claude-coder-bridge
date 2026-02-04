@@ -7,7 +7,7 @@ export interface PendingApprovalBase {
   input: any;
   resolve: (decision: PermissionDecision) => void;
   reject: (error: Error) => void;
-  timeout: NodeJS.Timeout;
+  timeout: NodeJS.Timeout | undefined;
   createdAt: Date;
 }
 
@@ -49,7 +49,7 @@ export abstract class BasePermissionManager<TContext, TPending extends PendingAp
     context: TContext,
     resolve: (decision: PermissionDecision) => void,
     reject: (error: Error) => void,
-    timeout: NodeJS.Timeout,
+    timeout: NodeJS.Timeout | undefined,
   ): TPending;
 
   protected abstract sendApprovalRequest(pending: TPending): Promise<void>;
@@ -67,9 +67,9 @@ export abstract class BasePermissionManager<TContext, TPending extends PendingAp
     const requestId = generateRequestId();
 
     return new Promise<PermissionDecision>((resolve) => {
-      const timeout = setTimeout(() => {
-        this.handleTimeout(requestId);
-      }, this.approvalTimeout);
+      const timeout = this.approvalTimeout > 0
+        ? setTimeout(() => { this.handleTimeout(requestId); }, this.approvalTimeout)
+        : undefined;
 
       const pending = this.createPendingApproval(
         requestId, toolName, input, context, resolve, () => {}, timeout,

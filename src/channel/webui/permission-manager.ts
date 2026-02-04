@@ -9,7 +9,7 @@ export class WebUIPermissionManager extends BasePermissionManager<WebUIContext, 
   private sendFunction?: SendFunction;
 
   constructor() {
-    const timeoutMs = parseInt(process.env.WEBUI_APPROVAL_TIMEOUT || '120') * 1000;
+    const timeoutMs = parseInt(process.env.WEBUI_APPROVAL_TIMEOUT || '3600') * 1000;
     super(timeoutMs, 'deny');
   }
 
@@ -31,7 +31,7 @@ export class WebUIPermissionManager extends BasePermissionManager<WebUIContext, 
     context: WebUIContext,
     resolve: (decision: PermissionDecision) => void,
     reject: (error: Error) => void,
-    timeout: NodeJS.Timeout,
+    timeout: NodeJS.Timeout | undefined,
   ): PendingWebUIApproval {
     return {
       requestId,

@@ -15,7 +15,7 @@ export class EmailPermissionManager extends BasePermissionManager<EmailContext, 
   private approveAllTokens = new Map<string, string>();
 
   constructor() {
-    const timeoutMs = parseInt(process.env.EMAIL_APPROVAL_TIMEOUT || '300') * 1000;
+    const timeoutMs = parseInt(process.env.EMAIL_APPROVAL_TIMEOUT || '3600') * 1000;
     super(timeoutMs, 'deny');
     const port = process.env.MCP_SERVER_PORT || '3001';
     this.baseUrl = process.env.PUBLIC_URL || `http://localhost:${port}`;
@@ -43,7 +43,7 @@ export class EmailPermissionManager extends BasePermissionManager<EmailContext, 
     context: EmailContext,
     resolve: (decision: PermissionDecision) => void,
     reject: (error: Error) => void,
-    timeout: NodeJS.Timeout,
+    timeout: NodeJS.Timeout | undefined,
   ): PendingEmailApproval {
     return {
       requestId,

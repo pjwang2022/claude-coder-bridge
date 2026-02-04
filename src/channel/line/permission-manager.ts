@@ -7,7 +7,7 @@ export class LinePermissionManager extends BasePermissionManager<LineContext, Pe
   private channelAccessToken: string;
 
   constructor(channelAccessToken: string) {
-    const timeoutMs = parseInt(process.env.LINE_APPROVAL_TIMEOUT || '300') * 1000;
+    const timeoutMs = parseInt(process.env.LINE_APPROVAL_TIMEOUT || '3600') * 1000;
     super(timeoutMs, 'deny');
     this.channelAccessToken = channelAccessToken;
   }
@@ -26,7 +26,7 @@ export class LinePermissionManager extends BasePermissionManager<LineContext, Pe
     context: LineContext,
     resolve: (decision: PermissionDecision) => void,
     reject: (error: Error) => void,
-    timeout: NodeJS.Timeout,
+    timeout: NodeJS.Timeout | undefined,
   ): PendingLineApproval {
     return {
       requestId,

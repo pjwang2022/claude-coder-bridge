@@ -314,6 +314,26 @@ Claude Code 使用各種工具（讀取檔案、寫入檔案、執行指令等�
 | Email | HTTP 連結點擊 | 5 分鐘 |
 | Web UI | 瀏覽器彈窗 | 2 分鐘 |
 
+### 自動核准工具
+
+若要跳過特定工具的互動式審批，在 `.env` 中設定 `AUTO_APPROVE_TOOLS`：
+
+```env
+AUTO_APPROVE_TOOLS=Edit,Write
+```
+
+可設定的工具名稱：
+
+| 工具 | 說明 |
+|------|------|
+| `Bash` | 執行 shell 指令 |
+| `Write` | 建立或覆寫檔案 |
+| `Edit` | 編輯現有檔案 |
+| `MultiEdit` | 編輯檔案中的多個位置 |
+| `TodoWrite` | 寫入待辦事項 |
+
+以逗號分隔，區分大小寫。未列在此處的工具仍會遵循預設審批流程。
+
 ## 進階設定
 
 ```env
@@ -337,6 +357,10 @@ EMAIL_APPROVAL_TIMEOUT=300
 
 # WebUI 審批逾時秒數（預設：120）
 WEBUI_APPROVAL_TIMEOUT=120
+
+# 自動核准特定工具，跳過互動式審批（逗號分隔）
+# 可用：Bash, Write, Edit, MultiEdit, TodoWrite
+# AUTO_APPROVE_TOOLS=Edit,Write
 ```
 
 ## 開發
@@ -407,6 +431,10 @@ curl http://localhost:3001/health
 }
 ```
 
+## 致謝
+
+本專案最初受到 [@timoconnellaus](https://github.com/timoconnellaus) 的 [claude-code-discord-bot](https://github.com/timoconnellaus/claude-code-discord-bot) 啟發，Discord 整合的初始概念源自該專案。本 repo 後來經過大幅改寫與擴展，支援多平台（LINE、Slack、Telegram、Email、Web UI）、共用架構及許多額外功能。
+
 ## 授權
 
-本專案採用 MIT License。
+MIT License。詳見 [LICENSE](LICENSE)。

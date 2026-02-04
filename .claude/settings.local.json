@@ -1,10 +1,7 @@
 {
   "permissions": {
     "allow": [
-      "Bash(bun add:*)",
       "Bash(mkdir:*)",
-      "Bash(bun install:*)",
-      "Bash(bun run:*)",
       "Bash(git commit:*)",
       "Bash(git push:*)",
       "Bash(git add:*)",
@@ -23,14 +20,11 @@
       "Bash(git mv:*)",
       "WebFetch(domain:docs.speechmatics.com)",
       "WebFetch(domain:smbatchdocs.z6.web.core.windows.net)",
-      "Bash(bun:*)",
       "Bash(claude:*)",
       "Bash(npm view:*)",
       "Bash(npx:*)",
       "Bash(npm run test:run:*)",
-      "Bash(export PATH=\"$HOME/.bun/bin:$PATH\")",
       "Bash(./node_modules/.bin/tsc:*)",
-      "Bash(~/.bun/bin/bun run test:run:*)",
       "Bash(npm i)",
       "mcp__chrome-devtools__list_pages",
       "mcp__chrome-devtools__navigate_page",
@@ -40,7 +34,17 @@
       "mcp__chrome-devtools__evaluate_script",
       "mcp__chrome-devtools__new_page",
       "Bash(node --version:*)",
-      "Bash(chmod:*)"
+      "Bash(chmod:*)",
+      "Bash(export PATH=\"$HOME/.nvm/versions/node/v20.19.0/bin:$PATH\")",
+      "Bash(command -v:*)",
+      "mcp__ide__getDiagnostics",
+      "Bash(export PATH=\"/opt/homebrew/bin:/usr/local/bin:$PATH\")",
+      "Bash(/Users/pj/Project/claude-code-discord-bot/node_modules/.bin/vitest run:*)",
+      "WebFetch(domain:docs.anthropic.com)",
+      "WebFetch(domain:docs.claude.com)",
+      "Bash(./node_modules/.bin/vitest run:*)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(gh api:*)"
     ],
     "deny": []
   }

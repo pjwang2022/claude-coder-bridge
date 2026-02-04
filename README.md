@@ -314,6 +314,26 @@ When approval is needed, the bot sends a platform-native prompt and waits for th
 | Email | HTTP link click | 5 min |
 | Web UI | Browser modal | 2 min |
 
+### Auto-Approve Tools
+
+To skip interactive approval for specific tools, set `AUTO_APPROVE_TOOLS` in your `.env`:
+
+```env
+AUTO_APPROVE_TOOLS=Edit,Write
+```
+
+Available tool names for auto-approval:
+
+| Tool | Description |
+|------|-------------|
+| `Bash` | Run shell commands |
+| `Write` | Create or overwrite files |
+| `Edit` | Edit existing files |
+| `MultiEdit` | Edit multiple locations in a file |
+| `TodoWrite` | Write todo items |
+
+Comma-separated, case-sensitive. Tools not listed here will still follow the default approval flow.
+
 ## Advanced Configuration
 
 ```env
@@ -337,6 +357,10 @@ EMAIL_APPROVAL_TIMEOUT=300
 
 # WebUI approval timeout in seconds (default: 120)
 WEBUI_APPROVAL_TIMEOUT=120
+
+# Auto-approve specific tools without interactive approval (comma-separated)
+# Available: Bash, Write, Edit, MultiEdit, TodoWrite
+# AUTO_APPROVE_TOOLS=Edit,Write
 ```
 
 ## Development
@@ -407,6 +431,10 @@ curl http://localhost:3001/health
 }
 ```
 
+## Acknowledgments
+
+This project was originally inspired by [claude-code-discord-bot](https://github.com/timoconnellaus/claude-code-discord-bot) by [@timoconnellaus](https://github.com/timoconnellaus). The initial Discord integration concept came from that project. This repository has since been substantially rewritten and expanded to support multiple platforms (LINE, Slack, Telegram, Email, Web UI), a shared architecture, and many additional features.
+
 ## License
 
-This project is licensed under the MIT License.
+MIT License. See [LICENSE](LICENSE) for details.

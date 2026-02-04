@@ -9,7 +9,7 @@ export class SlackPermissionManager extends BasePermissionManager<SlackContext, 
   private slackClient: WebClient | null = null;
 
   constructor() {
-    const timeoutMs = parseInt(process.env.MCP_APPROVAL_TIMEOUT || '30') * 1000;
+    const timeoutMs = parseInt(process.env.MCP_APPROVAL_TIMEOUT || '3600') * 1000;
     const defaultOnTimeout = (process.env.MCP_DEFAULT_ON_TIMEOUT as 'allow' | 'deny') || 'deny';
     super(timeoutMs, defaultOnTimeout);
   }
@@ -44,7 +44,7 @@ export class SlackPermissionManager extends BasePermissionManager<SlackContext, 
     context: SlackContext,
     resolve: (decision: PermissionDecision) => void,
     reject: (error: Error) => void,
-    timeout: NodeJS.Timeout,
+    timeout: NodeJS.Timeout | undefined,
   ): PendingSlackApproval {
     return {
       requestId,

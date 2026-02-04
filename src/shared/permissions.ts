@@ -9,8 +9,19 @@ export function generateRequestId(): string {
 }
 
 /**
+ * Parse AUTO_APPROVE_TOOLS env var into a set of tool names.
+ * Supports comma-separated values, e.g. "Edit,Write,Bash"
+ */
+function getAutoApproveTools(): Set<string> {
+  const raw = process.env.AUTO_APPROVE_TOOLS;
+  if (!raw) return new Set();
+  return new Set(raw.split(',').map(t => t.trim()).filter(Boolean));
+}
+
+/**
  * Determine if a tool requires approval based on risk level.
  * Safe tools are auto-approved; dangerous/unknown tools need interactive approval.
+ * Tools listed in AUTO_APPROVE_TOOLS env var are also auto-approved.
  */
 export function requiresApproval(toolName: string, input: any): boolean {
   const safeTools = [
@@ -32,6 +43,11 @@ export function requiresApproval(toolName: string, input: any): boolean {
   ];
 
   if (safeTools.includes(toolName)) {
+    return false;
+  }
+
+  const autoApprove = getAutoApproveTools();
+  if (autoApprove.has(toolName)) {
     return false;
   }
 

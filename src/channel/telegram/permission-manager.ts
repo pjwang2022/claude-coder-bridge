@@ -8,7 +8,7 @@ export class TelegramPermissionManager extends BasePermissionManager<TelegramCon
   private bot?: Telegraf;
 
   constructor() {
-    const timeoutMs = parseInt(process.env.TELEGRAM_APPROVAL_TIMEOUT || '300') * 1000;
+    const timeoutMs = parseInt(process.env.TELEGRAM_APPROVAL_TIMEOUT || '3600') * 1000;
     super(timeoutMs, 'deny');
   }
 
@@ -30,7 +30,7 @@ export class TelegramPermissionManager extends BasePermissionManager<TelegramCon
     context: TelegramContext,
     resolve: (decision: PermissionDecision) => void,
     reject: (error: Error) => void,
-    timeout: NodeJS.Timeout,
+    timeout: NodeJS.Timeout | undefined,
   ): PendingTelegramApproval {
     return {
       requestId,

@@ -4,18 +4,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Commands
 
-- `bun install` - Install dependencies
-- `bun run test:run` - Run tests (vitest, single run). Never use just `bun test`.
-- `bun start` - Run the application (but see restrictions below)
+- `npm install` - Install dependencies
+- `npm run test:run` - Run tests (vitest, single run).
+- `npm start` - Run the application (but see restrictions below)
 
 ## Important Restrictions
 
-- **Never run the bot.** Do not use `bun start` or `bun run src/index.ts`.
+- **Never run the bot.** Do not use `npm start` or `npx tsx src/index.ts`.
 - You can run tests, but never run the main application.
 
 ## Runtime
 
-This project uses **Bun** as the JavaScript runtime. Bun automatically loads `.env` files. TypeScript strict mode is enabled with ESNext target and bundler module resolution. When adding functionality, prefer Bun's built-in APIs (e.g., `bun:sqlite` for SQLite).
+This project uses **Node.js** with **tsx** as the TypeScript runner. Environment variables are loaded via `dotenv`. TypeScript strict mode is enabled with ESNext target and bundler module resolution. SQLite is provided by `better-sqlite3`.
 
 ## Architecture
 
@@ -38,7 +38,7 @@ A Discord + LINE bot that spawns Claude Code CLI processes, with an MCP server f
 - **`src/mcp/server.ts`** (`MCPPermissionServer`) - Express HTTP server exposing `approve_tool` via MCP protocol. Uses `StreamableHTTPServerTransport`.
 - **`src/mcp/permission-manager.ts`** (`PermissionManager`) - Bridges MCP permission requests to Discord messages with reaction-based approval. Handles timeouts and auto-decisions.
 - **`src/mcp/permissions.ts`** - Tool safety classification. Safe tools (Read, Glob, Grep, etc.) auto-approve. Dangerous tools (Bash, Write, Edit) require Discord approval.
-- **`src/db/database.ts`** (`DatabaseManager`) - SQLite session persistence (`bun:sqlite`). Stores channel-to-session mappings with 30-day auto-cleanup.
+- **`src/db/database.ts`** (`DatabaseManager`) - SQLite session persistence (`better-sqlite3`). Stores channel-to-session mappings with 30-day auto-cleanup.
 - **`src/utils/shell.ts`** - Builds the Claude CLI command string. Creates per-session MCP config files in `/tmp` with Discord context as env vars. Handles shell escaping.
 - **`mcp-bridge.cjs`** - Node.js stdio-to-HTTP bridge. Claude Code spawns this as an MCP server; it forwards JSON-RPC to `localhost:3001` with Discord context headers.
 

@@ -4,7 +4,7 @@
 
 This project uses:
 
-- **Bun** as the JavaScript runtime
+- **Node.js** with **tsx** as the TypeScript runner
 - **TypeScript** with strict type checking
 - **discord.js** for Discord API interaction
 - **Claude Code CLI** for AI interactions
@@ -13,13 +13,13 @@ To modify the code:
 
 ```bash
 # Install dependencies
-bun install
+npm install
 
 # Run during development (restart manually after changes)
-bun start
+npm start
 
 # Run tests
-bun test
+npm run test:run
 ```
 
 **Note**: Hot reload is not recommended for this bot as it can cause process management issues and spawn multiple Claude processes.
