@@ -163,8 +163,8 @@ Create an app at [api.slack.com/apps](https://api.slack.com/apps):
 
 1. Create new app > From scratch
 2. Enable **Socket Mode** (Settings > Socket Mode) and generate an App-Level Token with `connections:write` scope
-3. Event Subscriptions > Subscribe to: `message.channels`, `reaction_added`
-4. OAuth & Permissions > Bot Token Scopes: `chat:write`, `channels:history`, `channels:read`, `reactions:read`, `reactions:write`, `files:read`
+3. Event Subscriptions > Subscribe to: `message.channels`, `message.groups`, `reaction_added`
+4. OAuth & Permissions > Bot Token Scopes: `chat:write`, `channels:history`, `channels:read`, `groups:read`, `groups:history`, `groups:write`, `reactions:read`, `reactions:write`, `files:read`
 5. Install to workspace and copy the Bot Token
 
 ```env

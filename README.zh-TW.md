@@ -163,8 +163,8 @@ LINE_ALLOWED_USER_IDS=U1234abc,U5678def   # 選填：限制使用者
 
 1. Create new app > From scratch
 2. 啟用 **Socket Mode**（Settings > Socket Mode）並產生 App-Level Token，scope 為 `connections:write`
-3. Event Subscriptions > 訂閱：`message.channels`、`reaction_added`
-4. OAuth & Permissions > Bot Token Scopes：`chat:write`、`channels:history`、`channels:read`、`reactions:read`、`reactions:write`、`files:read`
+3. Event Subscriptions > 訂閱：`message.channels`、`message.groups`、`reaction_added`
+4. OAuth & Permissions > Bot Token Scopes：`chat:write`、`channels:history`、`channels:read`、`groups:read`、`groups:history`、`groups:write`、`reactions:read`、`reactions:write`、`files:read`
 5. 安裝到 workspace 並複製 Bot Token
 
 ```env
