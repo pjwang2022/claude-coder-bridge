@@ -66,7 +66,8 @@ export function buildApprovalEmail(
   toolName: string,
   input: any,
   baseUrl: string,
-): { subject: string; html: string } {
+  approveAllUrl?: string,
+): { html: string } {
   const inputStr = JSON.stringify(input, null, 2);
   const truncatedInput = inputStr.length > 2000
     ? truncate(inputStr, 2000) + '\n(parameters truncated, review carefully)'
@@ -74,6 +75,10 @@ export function buildApprovalEmail(
 
   const approveUrl = `${baseUrl}/email/approve?requestId=${encodeURIComponent(requestId)}&token=${encodeURIComponent(token)}`;
   const denyUrl = `${baseUrl}/email/deny?requestId=${encodeURIComponent(requestId)}&token=${encodeURIComponent(token)}`;
+
+  const approveAllButton = approveAllUrl
+    ? `<a href="${approveAllUrl}" style="display:inline-block;padding:10px 24px;background:#2980b9;color:#fff;text-decoration:none;border-radius:6px;font-weight:bold;">⚡ Approve All Pending</a>`
+    : '';
 
   const html = `
     <div style="font-family:system-ui,sans-serif;max-width:700px;">
@@ -85,16 +90,14 @@ export function buildApprovalEmail(
         <pre style="white-space:pre-wrap;word-wrap:break-word;background:#f6f8fa;padding:12px;border-radius:6px;font-size:12px;overflow:auto;">${esc(truncatedInput)}</pre>
         <div style="margin-top:16px;">
           <a href="${approveUrl}" style="display:inline-block;padding:10px 24px;background:#27ae60;color:#fff;text-decoration:none;border-radius:6px;font-weight:bold;margin-right:8px;">✅ Approve</a>
-          <a href="${denyUrl}" style="display:inline-block;padding:10px 24px;background:#e74c3c;color:#fff;text-decoration:none;border-radius:6px;font-weight:bold;">❌ Deny</a>
+          <a href="${denyUrl}" style="display:inline-block;padding:10px 24px;background:#e74c3c;color:#fff;text-decoration:none;border-radius:6px;font-weight:bold;margin-right:8px;">❌ Deny</a>
+          ${approveAllButton}
         </div>
       </div>
     </div>
   `;
 
-  return {
-    subject: `🔐 Permission Required: ${toolName}`,
-    html,
-  };
+  return { html };
 }
 
 // --- Simple Messages ---

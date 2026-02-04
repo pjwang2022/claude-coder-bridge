@@ -256,7 +256,11 @@ export class MCPPermissionServer {
       this.handleEmailApproval(req, res, false);
     });
 
-    console.log('Email MCP route registered: /email/mcp, /email/approve, /email/deny');
+    this.app.get('/email/approve-all', (req: express.Request, res: express.Response) => {
+      this.handleEmailApproveAll(req, res);
+    });
+
+    console.log('Email MCP route registered: /email/mcp, /email/approve, /email/deny, /email/approve-all');
   }
 
   private handleEmailApproval(req: express.Request, res: express.Response, approved: boolean): void {
@@ -270,6 +274,20 @@ export class MCPPermissionServer {
 
     const result = this.emailPermissionManager.handleApprovalHttp(requestId, token, approved);
     const title = result.success ? (approved ? 'Approved' : 'Denied') : 'Error';
+    res.status(result.success ? 200 : 400).send(this.approvalHtmlPage(title, result.message));
+  }
+
+  private handleEmailApproveAll(req: express.Request, res: express.Response): void {
+    const from = req.query.from as string;
+    const token = req.query.token as string;
+
+    if (!from || !token || !this.emailPermissionManager) {
+      res.status(400).send(this.approvalHtmlPage('Error', 'Invalid or missing parameters.'));
+      return;
+    }
+
+    const result = this.emailPermissionManager.handleApproveAllHttp(from, token);
+    const title = result.success ? 'Approved All' : 'Error';
     res.status(result.success ? 200 : 400).send(this.approvalHtmlPage(title, result.message));
   }
 
