@@ -586,7 +586,7 @@
       <button class="btn-icon" onclick="this.previousElementSibling.click()" title="Attach files">&#128206;</button>
       <button class="btn-icon mic-btn" onclick="toggleRecording()" title="Record voice">&#127908;</button>
       <textarea rows="1" placeholder="Type a prompt..." onkeydown="handleKeyDown(event)" oninput="autoResize(this)"></textarea>
-      <button class="btn" onclick="sendPrompt()">Send</button>
+      <button class="btn btn-send" onclick="sendPrompt()">Send</button>
       <button class="btn btn-cancel" onclick="cancelTask()">Cancel</button>
     </div>
   </div>
@@ -1027,12 +1027,15 @@
   }
 
   function updateCancelButton() {
+    const sendBtn = document.querySelector('#main-input .btn-send');
     const cancelBtn = document.querySelector('#main-input .btn-cancel');
-    if (!cancelBtn) return;
+    if (!cancelBtn || !sendBtn) return;
     const s = currentSession ? sessions.get(currentSession) : null;
     if (s && s.isRunning) {
+      sendBtn.style.display = 'none';
       cancelBtn.classList.add('visible');
     } else {
+      sendBtn.style.display = '';
       cancelBtn.classList.remove('visible');
     }
   }
