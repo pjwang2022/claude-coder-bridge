@@ -79,8 +79,6 @@
   .btn:hover { opacity: 0.85; }
   .btn-danger { background: var(--red); }
   .btn-sm { padding: 4px 10px; font-size: 11px; }
-  .btn-cancel { background: var(--red); display: none; }
-  .btn-cancel.visible { display: inline-block; }
 
   /* Overlays (auth + project selection) */
   .overlay {
@@ -430,6 +428,28 @@
   .btn-approve { background: var(--green); }
   .btn-deny { background: var(--red); }
 
+  /* Close confirmation modal */
+  #close-confirm-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.6);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+  }
+  #close-confirm-overlay.active { display: flex; }
+  #close-confirm-box {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    max-width: 400px;
+    width: 90%;
+    text-align: center;
+  }
+  #close-confirm-box h3 { margin-bottom: 12px; font-size: 16px; color: var(--yellow); }
+  #close-confirm-box p { margin-bottom: 16px; color: var(--fg2); font-size: 14px; }
+
   /* Button icons */
   .btn-icon {
     background: transparent;
@@ -555,6 +575,18 @@
   </div>
 </div>
 
+<!-- Close Session Confirmation -->
+<div id="close-confirm-overlay">
+  <div id="close-confirm-box">
+    <h3>Task Running</h3>
+    <p>This session has a task running. What would you like to do?</p>
+    <div class="approval-actions">
+      <button class="btn" onclick="confirmCloseSession('hide')">Hide</button>
+      <button class="btn btn-deny" onclick="confirmCloseSession('cancel')">Cancel Task</button>
+    </div>
+  </div>
+</div>
+
 <!-- Header -->
 <div id="header">
   <div style="display:flex;align-items:center">
@@ -586,8 +618,7 @@
       <button class="btn-icon" onclick="this.previousElementSibling.click()" title="Attach files">&#128206;</button>
       <button class="btn-icon mic-btn" onclick="toggleRecording()" title="Record voice">&#127908;</button>
       <textarea rows="1" placeholder="Type a prompt..." onkeydown="handleKeyDown(event)" oninput="autoResize(this)"></textarea>
-      <button class="btn btn-send" onclick="sendPrompt()">Send</button>
-      <button class="btn btn-cancel" onclick="cancelTask()">Cancel</button>
+      <button class="btn" onclick="sendPrompt()">Send</button>
     </div>
   </div>
 </div>
@@ -840,11 +871,25 @@
     updateTabs();
   }
 
+  let pendingCloseSession = null;
+
   function closeSession(name, e) {
     if (e) e.stopPropagation();
     if (sessions.size <= 1) return; // keep at least one
 
-    // Just hide from tab bar - session stays on server
+    const s = sessions.get(name);
+
+    // If task is running, show confirmation dialog
+    if (s && s.isRunning) {
+      pendingCloseSession = name;
+      document.getElementById('close-confirm-overlay').classList.add('active');
+      return;
+    }
+
+    doCloseSession(name);
+  }
+
+  function doCloseSession(name) {
     const s = sessions.get(name);
     if (s && s.chatEl.parentNode) s.chatEl.parentNode.removeChild(s.chatEl);
     sessions.delete(name);
@@ -859,6 +904,24 @@
       }
     }
     updateTabs();
+  }
+
+  function confirmCloseSession(action) {
+    document.getElementById('close-confirm-overlay').classList.remove('active');
+
+    if (!pendingCloseSession) return;
+    const name = pendingCloseSession;
+    pendingCloseSession = null;
+
+    if (action === 'cancel') {
+      // Cancel the task first
+      if (ws && currentProject) {
+        ws.send(JSON.stringify({ type: 'cancel_task', project: currentProject, sessionName: name }));
+      }
+    }
+
+    // Close the tab (hide) regardless of action
+    doCloseSession(name);
   }
 
   // --- Session history dropdown (header) ---
@@ -929,7 +992,6 @@
     currentSession = name;
     s.chatEl.scrollTop = s.chatEl.scrollHeight;
     updateTabs();
-    updateCancelButton();
   }
 
   function showEmpty() {
@@ -1023,28 +1085,6 @@
     const s = sessions.get(name);
     if (s) s.isRunning = running;
     updateTabs();
-    updateCancelButton();
-  }
-
-  function updateCancelButton() {
-    const sendBtn = document.querySelector('#main-input .btn-send');
-    const cancelBtn = document.querySelector('#main-input .btn-cancel');
-    if (!cancelBtn || !sendBtn) return;
-    const s = currentSession ? sessions.get(currentSession) : null;
-    if (s && s.isRunning) {
-      sendBtn.style.display = 'none';
-      cancelBtn.classList.add('visible');
-    } else {
-      sendBtn.style.display = '';
-      cancelBtn.classList.remove('visible');
-    }
-  }
-
-  function cancelTask() {
-    if (!currentSession || !currentProject || !ws) return;
-    const s = sessions.get(currentSession);
-    if (!s || !s.isRunning) return;
-    ws.send(JSON.stringify({ type: 'cancel_task', project: currentProject, sessionName: currentSession }));
   }
 
   function markUpdate(name) {
