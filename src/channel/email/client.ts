@@ -277,7 +277,7 @@ export class EmailBot {
     const projectDir = path.join(this.baseFolder, projectName);
     if (!fs.existsSync(projectDir)) {
       await this.sendReply(from, messageId, {
-        subject: `Project not found: ${projectName}`,
+        subject: `❌ [${projectName}] Project not found`,
         text: `Project "${projectName}" does not exist in the base folder.`,
       });
       return;
@@ -296,14 +296,14 @@ export class EmailBot {
     if (body.startsWith('/cancel')) {
       if (!this.claudeManager.hasActiveProcess(from, projectName)) {
         await this.sendReply(from, messageId, {
-          subject: `No active task: ${projectName}`,
+          subject: `[${projectName}] No active task`,
           text: 'No active task to cancel.',
         });
         return;
       }
       this.claudeManager.cancelTask(from, projectName);
       await this.sendReply(from, messageId, {
-        subject: `Task cancelled: ${projectName}`,
+        subject: `[${projectName}] Task cancelled`,
         text: `Task cancelled for project: ${projectName}. Session is preserved.`,
       });
       return;
@@ -312,7 +312,7 @@ export class EmailBot {
     if (body.startsWith('/clear')) {
       this.claudeManager.clearSession(from, projectName);
       await this.sendReply(from, messageId, {
-        subject: `Session cleared: ${projectName}`,
+        subject: `[${projectName}] Session cleared`,
         text: `Session cleared for project: ${projectName}`,
       });
       return;
@@ -323,7 +323,7 @@ export class EmailBot {
     let prompt = body || subjectPrompt;
     if (!prompt) {
       await this.sendReply(from, messageId, {
-        subject: 'Empty prompt',
+        subject: `[${projectName}] Empty prompt`,
         text: 'Please include a prompt in the email body or subject line.',
       });
       return;
@@ -387,14 +387,14 @@ export class EmailBot {
     // Check for active process
     if (this.claudeManager.hasActiveProcess(from, projectName)) {
       await this.sendReply(from, messageId, {
-        subject: `Task already running: ${projectName}`,
+        subject: `[${projectName}] Task already running`,
         text: 'A task is already running for this project. Send /status to check.',
       });
       return;
     }
 
     // Send processing confirmation
-    await this.sendReply(from, messageId, buildProcessingEmail());
+    await this.sendReply(from, messageId, buildProcessingEmail(projectName));
 
     // Start Claude task
     try {
@@ -403,6 +403,7 @@ export class EmailBot {
     } catch (error) {
       console.error('Email bot: Claude task error:', error);
       await this.sendReply(from, messageId, buildErrorEmail(
+        projectName,
         error instanceof Error ? error.message : String(error),
       ));
     }

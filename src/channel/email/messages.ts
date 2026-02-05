@@ -7,6 +7,7 @@ export function buildResultEmail(task: EmailTaskResult): { subject: string; html
   const statusEmoji = isSuccess ? '✅' : '❌';
   const statusText = isSuccess ? 'Complete' : 'Failed';
   const headerColor = isSuccess ? '#27ae60' : '#e74c3c';
+  const projectTag = `[${task.projectName}]`;
 
   let resultData: TaskResultData | null = null;
   try {
@@ -53,7 +54,7 @@ export function buildResultEmail(task: EmailTaskResult): { subject: string; html
   `;
 
   return {
-    subject: `${statusEmoji} ${statusText}: ${truncate(task.prompt, 60)}`,
+    subject: `${statusEmoji} ${projectTag} ${statusText}: ${truncate(task.prompt, 50)}`,
     html,
   };
 }
@@ -102,16 +103,16 @@ export function buildApprovalEmail(
 
 // --- Simple Messages ---
 
-export function buildProcessingEmail(): { subject: string; text: string } {
+export function buildProcessingEmail(projectName: string): { subject: string; text: string } {
   return {
-    subject: '⏳ Processing your request',
+    subject: `⏳ [${projectName}] Processing your request`,
     text: 'Your request is being processed by Claude Code. You will receive the result in a follow-up email.',
   };
 }
 
-export function buildErrorEmail(error: string): { subject: string; text: string } {
+export function buildErrorEmail(projectName: string, error: string): { subject: string; text: string } {
   return {
-    subject: '❌ Error',
+    subject: `❌ [${projectName}] Error`,
     text: `Error: ${error}`,
   };
 }
@@ -144,7 +145,8 @@ export function buildHelpEmail(): { subject: string; text: string } {
       '  /help   - Show this message',
       '',
       'Tips:',
-      '  - Reply to an existing thread to continue the conversation',
+      '  - Reply directly to any bot email to continue the conversation',
+      '  - No need to re-add [project-name] when replying — it\'s already in the subject',
       '  - Attach images and they will be passed to Claude',
       '  - The project name in [brackets] must match a folder in the base directory',
     ].join('\n'),
