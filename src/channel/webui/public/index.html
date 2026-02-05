@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
 <title>Claude Code Web UI</title>
 <style>
   :root {
@@ -21,13 +21,27 @@
     --radius: 8px;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
+  html {
+    height: 100%;
+    height: 100dvh;
+    height: var(--vh, 100dvh);
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
   body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace;
     background: var(--bg);
     color: var(--fg);
-    height: 100vh;
+    height: 100%;
+    height: 100dvh;
+    height: var(--vh, 100dvh);
     display: flex;
     flex-direction: column;
+    overflow: hidden;
+    overscroll-behavior: none;
+    position: fixed;
+    inset: 0;
+    touch-action: manipulation;
   }
 
   /* Header */
@@ -38,6 +52,8 @@
     padding: 10px 16px;
     background: var(--bg2);
     border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    z-index: 10;
   }
   #header h1 { font-size: 15px; font-weight: 600; }
   #status-dot {
@@ -63,6 +79,8 @@
   .btn:hover { opacity: 0.85; }
   .btn-danger { background: var(--red); }
   .btn-sm { padding: 4px 10px; font-size: 11px; }
+  .btn-cancel { background: var(--red); display: none; }
+  .btn-cancel.visible { display: inline-block; }
 
   /* Overlays (auth + project selection) */
   .overlay {
@@ -123,6 +141,8 @@
     background: var(--bg2);
     border-bottom: 1px solid var(--border);
     min-height: 36px;
+    flex-shrink: 0;
+    z-index: 10;
   }
   #tab-bar.visible { display: flex; }
   #tabs-scroll {
@@ -248,6 +268,7 @@
     flex: 1;
     display: flex;
     overflow: hidden;
+    min-height: 0;
   }
   .pane {
     flex: 1;
@@ -255,20 +276,26 @@
     flex-direction: column;
     overflow: hidden;
     min-width: 0;
+    min-height: 0;
   }
   .pane-content {
     flex: 1;
     overflow: hidden;
     display: flex;
     flex-direction: column;
+    min-height: 0;
   }
   .session-chat {
     flex: 1;
     overflow-y: auto;
+    overflow-x: hidden;
     padding: 12px 16px;
     display: flex;
     flex-direction: column;
     gap: 8px;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
   }
   .pane-empty {
     flex: 1;
@@ -285,6 +312,7 @@
     padding: 4px 12px;
     background: var(--bg2);
     border-top: 1px solid var(--border);
+    flex-shrink: 0;
   }
   .pane-input {
     display: flex;
@@ -293,6 +321,8 @@
     padding: 8px 12px;
     background: var(--bg2);
     border-top: 1px solid var(--border);
+    flex-shrink: 0;
+    z-index: 10;
   }
   .pane-input textarea {
     flex: 1;
@@ -431,6 +461,61 @@
   }
   .chip-remove { cursor: pointer; color: var(--red); font-weight: bold; margin-left: 2px; }
   .chip-remove:hover { color: #fff; }
+
+  /* Mobile styles */
+  @media (max-width: 768px) {
+    #header {
+      flex-shrink: 0;
+      padding: 8px 12px;
+      padding-top: max(8px, env(safe-area-inset-top));
+    }
+    #tab-bar {
+      flex-shrink: 0;
+    }
+    #panes {
+      min-height: 0;
+    }
+    .pane-input {
+      flex-shrink: 0;
+      padding: 10px 12px;
+      padding-bottom: max(10px, env(safe-area-inset-bottom));
+      gap: 8px;
+    }
+    .pane-input textarea {
+      min-height: 44px;
+      font-size: 16px; /* Prevents iOS zoom on focus */
+      padding: 10px 14px;
+    }
+    .btn-icon {
+      width: 44px;
+      height: 44px;
+      font-size: 18px;
+    }
+    .pane-input .btn {
+      padding: 10px 16px;
+      font-size: 14px;
+    }
+    .session-chat {
+      padding: 10px 12px;
+      -webkit-overflow-scrolling: touch;
+    }
+    .overlay-box {
+      padding: 24px;
+      max-height: 90%;
+      overflow-y: auto;
+    }
+    #approval-box {
+      max-height: 85%;
+      max-height: 85dvh;
+    }
+    .approval-actions {
+      position: sticky;
+      bottom: 0;
+      background: var(--bg2);
+      padding: 12px 0 0 0;
+      margin-top: 12px;
+    }
+  }
 </style>
 </head>
 <body>
@@ -502,6 +587,7 @@
       <button class="btn-icon mic-btn" onclick="toggleRecording()" title="Record voice">&#127908;</button>
       <textarea rows="1" placeholder="Type a prompt..." onkeydown="handleKeyDown(event)" oninput="autoResize(this)"></textarea>
       <button class="btn" onclick="sendPrompt()">Send</button>
+      <button class="btn btn-cancel" onclick="cancelTask()">Cancel</button>
     </div>
   </div>
 </div>
@@ -617,6 +703,12 @@
         break;
       case 'session_cleared':
         if (sn) addMsgToSession(sn, 'system', 'Session cleared');
+        break;
+      case 'task_cancelled':
+        if (sn) {
+          addMsgToSession(sn, 'system', 'Task cancelled');
+          markRunning(sn, false);
+        }
         break;
     }
   }
@@ -837,6 +929,7 @@
     currentSession = name;
     s.chatEl.scrollTop = s.chatEl.scrollHeight;
     updateTabs();
+    updateCancelButton();
   }
 
   function showEmpty() {
@@ -930,6 +1023,25 @@
     const s = sessions.get(name);
     if (s) s.isRunning = running;
     updateTabs();
+    updateCancelButton();
+  }
+
+  function updateCancelButton() {
+    const cancelBtn = document.querySelector('#main-input .btn-cancel');
+    if (!cancelBtn) return;
+    const s = currentSession ? sessions.get(currentSession) : null;
+    if (s && s.isRunning) {
+      cancelBtn.classList.add('visible');
+    } else {
+      cancelBtn.classList.remove('visible');
+    }
+  }
+
+  function cancelTask() {
+    if (!currentSession || !currentProject || !ws) return;
+    const s = sessions.get(currentSession);
+    if (!s || !s.isRunning) return;
+    ws.send(JSON.stringify({ type: 'cancel_task', project: currentProject, sessionName: currentSession }));
   }
 
   function markUpdate(name) {
@@ -1226,6 +1338,35 @@
     const d = document.createElement('div');
     d.textContent = str;
     return d.innerHTML;
+  }
+
+  // Prevent iOS rubber-banding on non-scrollable areas
+  document.addEventListener('touchmove', function(e) {
+    // Only allow touchmove in scrollable chat area
+    const target = e.target;
+    let node = target;
+    while (node && node !== document.body) {
+      if (node.classList && node.classList.contains('session-chat')) {
+        return; // Allow scrolling in chat
+      }
+      if (node.classList && (node.classList.contains('overlay-box') || node.classList.contains('project-list') || node.id === 'approval-input')) {
+        return; // Allow scrolling in overlays
+      }
+      node = node.parentNode;
+    }
+    e.preventDefault();
+  }, { passive: false });
+
+  // Handle mobile keyboard resize
+  if ('visualViewport' in window) {
+    const viewport = window.visualViewport;
+    const updateHeight = () => {
+      document.documentElement.style.setProperty('--vh', viewport.height + 'px');
+      document.body.style.height = viewport.height + 'px';
+    };
+    viewport.addEventListener('resize', updateHeight);
+    viewport.addEventListener('scroll', updateHeight);
+    updateHeight();
   }
 
   // Init
