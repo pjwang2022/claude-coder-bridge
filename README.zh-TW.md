@@ -188,13 +188,25 @@ LINE_ALLOWED_USER_IDS=U1234abc,U5678def   # 選填：限制使用者
 
 1. Create new app > From scratch
 2. 啟用 **Socket Mode**（Settings > Socket Mode）並產生 App-Level Token，scope 為 `connections:write`
-3. Event Subscriptions > 訂閱：`message.channels`、`message.groups`、`reaction_added`
-4. OAuth & Permissions > Bot Token Scopes：`chat:write`、`channels:history`、`channels:read`、`groups:read`、`groups:history`、`groups:write`、`reactions:read`、`reactions:write`、`files:read`、`commands`
-5. Slash Commands > 建立以下指令（Socket Mode 不需要 Request URL）：
+3. **App Home** > Messages Tab > 勾選 **「Allow users to send Slash commands and messages from the messages tab」**
+4. **Event Subscriptions** > 訂閱以下 bot events：
+   - `message.channels` - 公開頻道訊息
+   - `message.groups` - 私人頻道訊息
+   - `message.im` - 私訊
+   - `reaction_added` - 反應事件（用於審批）
+5. **OAuth & Permissions** > Bot Token Scopes：
+   - `chat:write` - 發送訊息
+   - `channels:history`、`channels:read` - 讀取公開頻道
+   - `groups:history`、`groups:read`、`groups:write` - 讀寫私人頻道
+   - `im:history`、`im:read`、`im:write` - 讀寫私訊
+   - `reactions:read`、`reactions:write` - 處理審批反應
+   - `files:read` - 讀取檔案附件
+   - `commands` - Slash 指令
+6. **Slash Commands** > 建立以下指令（Socket Mode 不需要 Request URL）：
    - `/clear` - 重設工作階段
    - `/cancel` - 取消當前任務
-   - `/project` - 選擇專案（用於私訊）
-6. 安裝到 workspace 並複製 Bot Token
+   - `/project` - 選擇專案
+7. 安裝到 workspace 並複製 Bot Token
 
 ```env
 SLACK_BOT_TOKEN=xoxb-your-bot-token
@@ -213,8 +225,8 @@ SLACK_ALLOWED_USER_IDS=U01234567,U89012345   # 選填：限制使用者
 | 指令 | 說明 |
 |------|------|
 | 任何訊息 | 以訊息內容作為 prompt 執行 Claude Code |
-| `/project` | （僅私訊）列出可用專案 |
-| `/project <名稱>` | （僅私訊）選擇專案 |
+| `/project` | 列出可用專案 |
+| `/project <名稱>` | 選擇專案 |
 | `/cancel` | 取消當前執行中的任務（工作階段保留）|
 | `/clear` | 重設當前頻道的工作階段 |
 

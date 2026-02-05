@@ -190,13 +190,25 @@ Create an app at [api.slack.com/apps](https://api.slack.com/apps):
 
 1. Create new app > From scratch
 2. Enable **Socket Mode** (Settings > Socket Mode) and generate an App-Level Token with `connections:write` scope
-3. Event Subscriptions > Subscribe to: `message.channels`, `message.groups`, `reaction_added`
-4. OAuth & Permissions > Bot Token Scopes: `chat:write`, `channels:history`, `channels:read`, `groups:read`, `groups:history`, `groups:write`, `reactions:read`, `reactions:write`, `files:read`, `commands`
-5. Slash Commands > Create these commands (Request URL is not needed for Socket Mode):
+3. **App Home** > Messages Tab > Check **"Allow users to send Slash commands and messages from the messages tab"**
+4. **Event Subscriptions** > Subscribe to bot events:
+   - `message.channels` - Messages in public channels
+   - `message.groups` - Messages in private channels
+   - `message.im` - Direct messages
+   - `reaction_added` - Reaction events for approval
+5. **OAuth & Permissions** > Bot Token Scopes:
+   - `chat:write` - Send messages
+   - `channels:history`, `channels:read` - Read public channels
+   - `groups:history`, `groups:read`, `groups:write` - Read/write private channels
+   - `im:history`, `im:read`, `im:write` - Read/write direct messages
+   - `reactions:read`, `reactions:write` - Handle approval reactions
+   - `files:read` - Read file attachments
+   - `commands` - Slash commands
+6. **Slash Commands** > Create these commands (Request URL is not needed for Socket Mode):
    - `/clear` - Reset the session
    - `/cancel` - Cancel the current task
-   - `/project` - Select a project (for DMs)
-6. Install to workspace and copy the Bot Token
+   - `/project` - Select a project
+7. Install to workspace and copy the Bot Token
 
 ```env
 SLACK_BOT_TOKEN=xoxb-your-bot-token
@@ -215,8 +227,8 @@ SLACK_ALLOWED_USER_IDS=U01234567,U89012345   # Optional: restrict access
 | Command | Description |
 |---------|-------------|
 | Any message | Run Claude Code with your message as the prompt |
-| `/project` | (DM only) List available projects |
-| `/project <name>` | (DM only) Select a project |
+| `/project` | List available projects |
+| `/project <name>` | Select a project |
 | `/cancel` | Cancel the current running task (session preserved) |
 | `/clear` | Reset the current channel's session |
 
