@@ -6,6 +6,10 @@ Run [Claude Code](https://docs.anthropic.com/en/docs/claude-code) sessions from 
 
 ![image](https://github.com/user-attachments/assets/d78c6dcd-eb28-48b6-be1c-74e25935b86b)
 
+> **⚠️ Warning: Personal Use Only**
+>
+> This project is intended for **personal use only**. Sharing your Claude Code access with others or using this bot to provide Claude Code as a service may violate [Anthropic's Terms of Service](https://www.anthropic.com/legal/consumer-terms). Violations could result in your account being suspended or terminated. Please use responsibly.
+
 ## Supported Platforms
 
 | Platform | Connection | Project Selection | Approval UX | Media |
@@ -71,6 +75,27 @@ Results streamed back to user via platform API
 **Synchronous** (Discord, Slack, Web UI): One Claude process per channel/connection. Messages queue if a process is already running. Sessions persist and resume across messages.
 
 **Asynchronous** (LINE, Telegram, Email): Tasks run in the background. Users can send new messages while tasks are running. Results are delivered as push notifications when complete.
+
+### Claude API Mode (Alternative)
+
+By default, this bot spawns Claude Code CLI processes. Alternatively, you can use the **Claude API directly** without installing Claude Code CLI:
+
+```env
+CLAUDE_MODE=api
+ANTHROPIC_API_KEY=sk-ant-api03-...
+ANTHROPIC_MODEL=claude-sonnet-4-20250514   # Optional
+ANTHROPIC_MAX_TOKENS=8192                   # Optional
+```
+
+| Feature | CLI Mode (default) | API Mode |
+|---------|-------------------|----------|
+| Requires Claude Code CLI | Yes | No |
+| Requires ANTHROPIC_API_KEY | No | Yes |
+| Available tools | All Claude Code tools | Read, Glob, Grep, Bash, Write, Edit |
+| Session persistence | Via Claude Code | In-memory only |
+| Cost tracking | No | Yes (per-session) |
+
+API mode is useful if you don't have Claude Code CLI installed or want more control over API parameters.
 
 ## Platform Setup
 
@@ -166,8 +191,12 @@ Create an app at [api.slack.com/apps](https://api.slack.com/apps):
 1. Create new app > From scratch
 2. Enable **Socket Mode** (Settings > Socket Mode) and generate an App-Level Token with `connections:write` scope
 3. Event Subscriptions > Subscribe to: `message.channels`, `message.groups`, `reaction_added`
-4. OAuth & Permissions > Bot Token Scopes: `chat:write`, `channels:history`, `channels:read`, `groups:read`, `groups:history`, `groups:write`, `reactions:read`, `reactions:write`, `files:read`
-5. Install to workspace and copy the Bot Token
+4. OAuth & Permissions > Bot Token Scopes: `chat:write`, `channels:history`, `channels:read`, `groups:read`, `groups:history`, `groups:write`, `reactions:read`, `reactions:write`, `files:read`, `commands`
+5. Slash Commands > Create these commands (Request URL is not needed for Socket Mode):
+   - `/clear` - Reset the session
+   - `/cancel` - Cancel the current task
+   - `/project` - Select a project (for DMs)
+6. Install to workspace and copy the Bot Token
 
 ```env
 SLACK_BOT_TOKEN=xoxb-your-bot-token
@@ -176,11 +205,18 @@ SLACK_SIGNING_SECRET=your_signing_secret
 SLACK_ALLOWED_USER_IDS=U01234567,U89012345   # Optional: restrict access
 ```
 
-**Usage**: Invite the bot to channels matching your folder names. Send messages to run Claude Code.
+**Usage**: Invite the bot to channels matching your folder names, or send direct messages.
+
+| Context | Project Selection |
+|---------|-------------------|
+| Channel | Channel name = folder (e.g., `#my-app` → `BASE_FOLDER/my-app`) |
+| DM | Use `/project <name>` command to select |
 
 | Command | Description |
 |---------|-------------|
 | Any message | Run Claude Code with your message as the prompt |
+| `/project` | (DM only) List available projects |
+| `/project <name>` | (DM only) Select a project |
 | `/cancel` | Cancel the current running task (session preserved) |
 | `/clear` | Reset the current channel's session |
 
@@ -253,7 +289,12 @@ EMAIL_ALLOWED_SENDERS=user@example.com,user2@example.com   # Optional: restrict 
 
 **Approval**: Bot sends an HTML email with clickable Approve / Deny links. Each link contains a one-time token. Timeout: 5 minutes.
 
-**Note**: Email uses IMAP IDLE for real-time monitoring, so no public URL is needed. Replies maintain the email thread via `In-Reply-To` and `References` headers.
+**Note**: Email uses IMAP IDLE for real-time monitoring. Replies maintain the email thread via `In-Reply-To` and `References` headers.
+
+**Remote servers**: If running on a remote server, set `PUBLIC_URL` so approval links point to the correct address:
+```env
+PUBLIC_URL=https://your-domain.com:3001
+```
 
 ---
 
@@ -345,6 +386,9 @@ Comma-separated, case-sensitive. Tools not listed here will still follow the def
 ```env
 # MCP server port (default: 3001)
 MCP_SERVER_PORT=3001
+
+# Claude process timeout in seconds (default: 300, max: 43200 = 12 hours)
+CLAUDE_PROCESS_TIMEOUT=300
 
 # Discord/Slack approval timeout in seconds (default: 30)
 MCP_APPROVAL_TIMEOUT=30

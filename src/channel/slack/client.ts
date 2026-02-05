@@ -66,6 +66,12 @@ export class SlackBot {
       await ack();
       await this.handleCancelCommand(command);
     });
+
+    // /project slash command
+    this.app.command('/project', async ({ command, ack }) => {
+      await ack();
+      await this.handleProjectCommand(command);
+    });
   }
 
   private async handleMessage(event: any, client: any): Promise<void> {
@@ -266,6 +272,69 @@ export class SlackBot {
       }
     } catch (error) {
       console.error('Slack: Error sending cancel confirmation:', error);
+    }
+  }
+
+  private async handleProjectCommand(command: any): Promise<void> {
+    const channelId = command.channel_id;
+    const userId = command.user_id;
+    const text = (command.text || '').trim();
+
+    // Auth check
+    if (this.config.allowedUserIds.length > 0 && !this.config.allowedUserIds.includes(userId)) {
+      return;
+    }
+
+    try {
+      if (!text) {
+        // List projects
+        let projects: string[] = [];
+        try {
+          projects = fs.readdirSync(this.baseFolder, { withFileTypes: true })
+            .filter(d => d.isDirectory())
+            .map(d => d.name)
+            .sort();
+        } catch {
+          await this.app.client.chat.postMessage({
+            channel: channelId,
+            text: 'Could not read project directory.',
+          });
+          return;
+        }
+
+        const currentProject = this.db.getSlackUserProject(userId);
+        const projectList = projects.length === 0
+          ? 'No projects found.'
+          : projects.map(p => {
+              const marker = p === currentProject ? ':arrow_forward: ' : '    ';
+              return `${marker}\`${p}\``;
+            }).join('\n');
+
+        await this.app.client.chat.postMessage({
+          channel: channelId,
+          text: `:file_folder: *Projects*\n\n${projectList}${currentProject ? `\n\n_Current: \`${currentProject}\`_` : ''}`,
+        });
+        return;
+      }
+
+      // /project <name>
+      const projectName = text.split(/\s+/)[0];
+      const projectDir = path.join(this.baseFolder, projectName);
+      if (!fs.existsSync(projectDir)) {
+        await this.app.client.chat.postMessage({
+          channel: channelId,
+          text: `Project \`${projectName}\` not found. Use \`/project\` to see available projects.`,
+        });
+        return;
+      }
+
+      this.db.setSlackUserProject(userId, projectName);
+      await this.app.client.chat.postMessage({
+        channel: channelId,
+        text: `:white_check_mark: Project set to: \`${projectName}\``,
+      });
+    } catch (error) {
+      console.error('Slack: Error handling /project command:', error);
     }
   }
 

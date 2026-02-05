@@ -6,6 +6,10 @@
 
 ![image](https://github.com/user-attachments/assets/d78c6dcd-eb28-48b6-be1c-74e25935b86b)
 
+> **⚠️ 警告：僅限個人使用**
+>
+> 本專案僅供**個人使用**。將您的 Claude Code 存取權分享給他人，或使用此機器人提供 Claude Code 服務，可能違反 [Anthropic 服務條款](https://www.anthropic.com/legal/consumer-terms)。違規行為可能導致您的帳號被暫停或終止。請負責任地使用。
+
 ## 支援平台
 
 | 平台 | 連線方式 | 專案選擇 | 審批方式 | 多媒體 |
@@ -71,6 +75,27 @@ Claude Code 在 BASE_FOLDER/{project-name}/ 中執行
 **同步模式**（Discord、Slack、Web UI）：每個頻道/連線一個 Claude 程序。程序執行中時新訊息會排隊等待。工作階段會跨訊息持久化並自動恢復。
 
 **非同步模式**（LINE、Telegram、Email）：任務在背景執行。使用者可在任務執行期間繼續傳送新訊息。任務完成後以推播通知方式送回結果。
+
+### Claude API 模式（替代方案）
+
+預設情況下，此機器人會啟動 Claude Code CLI 程序。你也可以選擇**直接使用 Claude API**，不需要安裝 Claude Code CLI：
+
+```env
+CLAUDE_MODE=api
+ANTHROPIC_API_KEY=sk-ant-api03-...
+ANTHROPIC_MODEL=claude-sonnet-4-20250514   # 選填
+ANTHROPIC_MAX_TOKENS=8192                   # 選填
+```
+
+| 功能 | CLI 模式（預設）| API 模式 |
+|-----|----------------|----------|
+| 需要 Claude Code CLI | 是 | 否 |
+| 需要 ANTHROPIC_API_KEY | 否 | 是 |
+| 可用工具 | 所有 Claude Code 工具 | Read, Glob, Grep, Bash, Write, Edit |
+| 工作階段持久化 | 透過 Claude Code | 僅記憶體（不持久化）|
+| 費用追蹤 | 無 | 有（每次工作階段）|
+
+如果你沒有安裝 Claude Code CLI，或想要更精確控制 API 參數，API 模式會是不錯的選擇。
 
 ## 平台設定
 
@@ -164,8 +189,12 @@ LINE_ALLOWED_USER_IDS=U1234abc,U5678def   # 選填：限制使用者
 1. Create new app > From scratch
 2. 啟用 **Socket Mode**（Settings > Socket Mode）並產生 App-Level Token，scope 為 `connections:write`
 3. Event Subscriptions > 訂閱：`message.channels`、`message.groups`、`reaction_added`
-4. OAuth & Permissions > Bot Token Scopes：`chat:write`、`channels:history`、`channels:read`、`groups:read`、`groups:history`、`groups:write`、`reactions:read`、`reactions:write`、`files:read`
-5. 安裝到 workspace 並複製 Bot Token
+4. OAuth & Permissions > Bot Token Scopes：`chat:write`、`channels:history`、`channels:read`、`groups:read`、`groups:history`、`groups:write`、`reactions:read`、`reactions:write`、`files:read`、`commands`
+5. Slash Commands > 建立以下指令（Socket Mode 不需要 Request URL）：
+   - `/clear` - 重設工作階段
+   - `/cancel` - 取消當前任務
+   - `/project` - 選擇專案（用於私訊）
+6. 安裝到 workspace 並複製 Bot Token
 
 ```env
 SLACK_BOT_TOKEN=xoxb-your-bot-token
@@ -174,11 +203,19 @@ SLACK_SIGNING_SECRET=your_signing_secret
 SLACK_ALLOWED_USER_IDS=U01234567,U89012345   # 選填：限制使用者
 ```
 
-**使用方式**：邀請機器人到與資料夾同名的頻道。傳送訊息即可執行 Claude Code。
+**使用方式**：邀請機器人到與資料夾同名的頻道，或傳送私訊。
+
+| 情境 | 專案選擇 |
+|------|----------|
+| 頻道 | 頻道名稱 = 資料夾（例如 `#my-app` → `BASE_FOLDER/my-app`）|
+| 私訊 | 使用 `/project <名稱>` 指令選擇 |
 
 | 指令 | 說明 |
 |------|------|
 | 任何訊息 | 以訊息內容作為 prompt 執行 Claude Code |
+| `/project` | （僅私訊）列出可用專案 |
+| `/project <名稱>` | （僅私訊）選擇專案 |
+| `/cancel` | 取消當前執行中的任務（工作階段保留）|
 | `/clear` | 重設當前頻道的工作階段 |
 
 **審批**：機器人發出審批訊息。以 :white_check_mark: 反應核准，:x: 反應拒絕。逾時：30 秒。
@@ -243,12 +280,18 @@ EMAIL_ALLOWED_SENDERS=user@example.com,user2@example.com   # 選填：限制寄�
 | `主旨：[my-app] 修復登入 bug` | 在 `my-app` 資料夾中以 email 內文作為 prompt 執行 Claude Code |
 | 內文：`/result` | 取得最新任務結果 |
 | 內文：`/status` | 查看執行中的任務 |
+| 內文：`/cancel` | 取消當前執行中的任務（工作階段保留）|
 | 內文：`/clear` | 清除主旨中專案的工作階段 |
 | 內文：`/help` | 顯示說明 |
 
 **審批**：機器人寄出帶有 Approve / Deny 連結的 HTML 郵件。每個連結包含一次性 token。逾時：5 分鐘。
 
-**注意**：Email 使用 IMAP IDLE 即時監聽收件匣，不需要公開 URL。回覆郵件透過 `In-Reply-To` 和 `References` header 維持郵件串。
+**注意**：Email 使用 IMAP IDLE 即時監聽收件匣。回覆郵件透過 `In-Reply-To` 和 `References` header 維持郵件串。
+
+**遠端伺服器**：如果在遠端伺服器上運行，需設定 `PUBLIC_URL` 讓審批連結指向正確的位址：
+```env
+PUBLIC_URL=https://your-domain.com:3001
+```
 
 ---
 
@@ -339,6 +382,9 @@ AUTO_APPROVE_TOOLS=Edit,Write
 ```env
 # MCP 伺服器 port（預設：3001）
 MCP_SERVER_PORT=3001
+
+# Claude 程序逾時秒數（預設：300，最大：43200 = 12 小時）
+CLAUDE_PROCESS_TIMEOUT=300
 
 # Discord/Slack 審批逾時秒數（預設：30）
 MCP_APPROVAL_TIMEOUT=30

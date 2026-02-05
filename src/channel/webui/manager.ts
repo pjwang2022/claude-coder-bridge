@@ -216,9 +216,10 @@ export class WebUIClaudeManager {
         },
 
         onTimeout: () => {
+          const timeoutMinutes = Math.round(getProcessTimeoutMs() / 60000);
           console.log(`WebUI process timed out (${connectionId})`);
           this.connectionProcesses.delete(processKey);
-          sendCtx(buildErrorPayload('Claude Code timed out (5 minutes)'));
+          sendCtx(buildErrorPayload(`Claude Code timed out (${timeoutMinutes} minutes)`));
         },
 
         onClose: (_code) => {
