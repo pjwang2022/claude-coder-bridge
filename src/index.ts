@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { DiscordBot } from './channel/discord/client.js';
 import { ClaudeManager } from './channel/discord/manager.js';
-import { validateConfig, validateLineConfig, validateSlackConfig, validateTelegramConfig, validateEmailConfig, validateWebUIConfig } from './utils/config.js';
+import { validateConfig, validateLineConfig, validateSlackConfig, validateTelegramConfig, validateEmailConfig, validateWebUIConfig, logClaudeMode } from './utils/config.js';
 import { MCPPermissionServer } from './mcp/server.js';
 import { LINEClaudeManager } from './channel/line/manager.js';
 import { LineBotHandler } from './channel/line/bot.js';
@@ -31,6 +31,9 @@ async function main() {
     process.exit(1);
   }
 
+  // Log Claude mode configuration
+  logClaudeMode();
+
   // Start MCP Permission Server
   const mcpPort = parseInt(process.env.MCP_SERVER_PORT || '3001');
   const mcpServer = new MCPPermissionServer(mcpPort);
@@ -46,6 +49,8 @@ async function main() {
     claudeManager = new ClaudeManager(config.baseFolder);
     bot = new DiscordBot(claudeManager, config.discord.allowedUserId, config.baseFolder);
     mcpServer.setDiscordBot(bot);
+    // Set permission manager for API mode
+    claudeManager.setPermissionManager(mcpServer.getPermissionManager());
   }
 
   // Optional: Slack Bot

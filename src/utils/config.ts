@@ -128,3 +128,55 @@ export function getProcessTimeoutMs(): number {
   return parseInt(process.env.CLAUDE_PROCESS_TIMEOUT || '300') * 1000;
 }
 
+export interface ApiModeConfig {
+  enabled: boolean;
+  apiKey?: string;
+  model: string;
+  maxTokens: number;
+}
+
+/**
+ * Check and validate API mode configuration.
+ * Returns config if API mode is properly configured, null otherwise.
+ */
+export function getApiModeConfig(): ApiModeConfig {
+  const mode = process.env.CLAUDE_MODE;
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+
+  if (mode !== 'api') {
+    return {
+      enabled: false,
+      model: 'claude-sonnet-4-20250514',
+      maxTokens: 8192,
+    };
+  }
+
+  if (!apiKey) {
+    console.warn('CLAUDE_MODE=api but ANTHROPIC_API_KEY is not set. API mode will not work.');
+    return {
+      enabled: false,
+      model: 'claude-sonnet-4-20250514',
+      maxTokens: 8192,
+    };
+  }
+
+  return {
+    enabled: true,
+    apiKey,
+    model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514',
+    maxTokens: parseInt(process.env.ANTHROPIC_MAX_TOKENS || '8192', 10),
+  };
+}
+
+/**
+ * Log the current Claude mode configuration on startup.
+ */
+export function logClaudeMode(): void {
+  const config = getApiModeConfig();
+  if (config.enabled) {
+    console.log(`Claude Mode: API (model: ${config.model}, max_tokens: ${config.maxTokens})`);
+  } else {
+    console.log('Claude Mode: CLI (using local Claude Code)');
+  }
+}
+

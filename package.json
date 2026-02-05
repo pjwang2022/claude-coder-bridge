@@ -11,6 +11,7 @@
     "test:run": "vitest run"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.72.1",
     "@modelcontextprotocol/sdk": "^1.0.0",
     "@slack/bolt": "^4.6.0",
     "better-sqlite3": "^11.0.0",

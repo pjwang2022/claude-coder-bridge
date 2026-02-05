@@ -6,6 +6,7 @@ import { buildClaudeCommand, type DiscordContext } from "./shell.js";
 import { spawnClaudeProcess, type ProcessHandle } from "../../shared/process-runner.js";
 import { DatabaseManager } from "../../db/database.js";
 import { getProcessTimeoutMs } from '../../utils/config.js';
+import { isApiMode, createApiRunner } from '../../shared/runner-factory.js';
 
 import { createThrottle } from '../../shared/throttle.js';
 import { cleanupOldAttachments } from '../../shared/attachments.js';
@@ -24,10 +25,19 @@ export class ClaudeManager {
       discordMessage: any;
     }
   >();
+  private permissionManager?: any;
 
   constructor(private baseFolder: string) {
     this.db = new DatabaseManager();
     this.db.cleanupOldSessions();
+  }
+
+  /**
+   * Set the permission manager for API mode tool approval.
+   * Only needed when CLAUDE_MODE=api.
+   */
+  setPermissionManager(pm: any): void {
+    this.permissionManager = pm;
   }
 
   hasActiveProcess(channelId: string): boolean {
@@ -99,76 +109,102 @@ export class ClaudeManager {
       throw new Error(`Working directory does not exist: ${workingDir}`);
     }
 
-    const commandString = buildClaudeCommand(workingDir, prompt, sessionId, discordContext);
-    console.log(`Running command: ${commandString}`);
-
-    const handle = spawnClaudeProcess(
-      commandString,
-      {
-        onInit: (parsed) => {
-          this.handleInitMessage(channelId, parsed).catch(console.error);
-          this.db.setSession(channelId, parsed.session_id, channelName);
-        },
-
-        onAssistantMessage: (parsed) => {
-          this.handleAssistantMessage(channelId, parsed).catch(console.error);
-        },
-
-        onToolResult: (parsed) => {
-          this.handleToolResultMessage(channelId, parsed).catch(console.error);
-        },
-
-        onResult: (parsed) => {
-          this.handleResultMessage(channelId, parsed).catch(console.error);
-          this.db.setSession(channelId, parsed.session_id, channelName);
-          this.channelProcesses.delete(channelId);
-        },
-
-        onError: (error) => {
-          console.error(`Claude process error for channel ${channelId}:`, error.message);
-          this.channelProcesses.delete(channelId);
-          const channel = this.channelMessages.get(channelId)?.channel;
-          if (channel) {
-            const errorEmbed = new EmbedBuilder()
-              .setTitle("❌ Claude Code Failed")
-              .setDescription(error.message)
-              .setColor(0xFF0000);
-            channel.send({ embeds: [errorEmbed] }).catch(console.error);
-          }
-        },
-
-        onStderr: (text) => {
-          console.error(`Claude stderr (${channelId}):`, text);
-          const channel = this.channelMessages.get(channelId)?.channel;
-          if (channel) {
-            const warningEmbed = new EmbedBuilder()
-              .setTitle("⚠️ Warning")
-              .setDescription(text)
-              .setColor(0xFFA500);
-            channel.send({ embeds: [warningEmbed] }).catch(console.error);
-          }
-        },
-
-        onTimeout: () => {
-          console.log(`Claude process timed out for channel ${channelId}`);
-          this.channelProcesses.delete(channelId);
-          const channel = this.channelMessages.get(channelId)?.channel;
-          if (channel) {
-            const timeoutEmbed = new EmbedBuilder()
-              .setTitle("⏰ Timeout")
-              .setDescription("Claude Code took too long to respond (5 minutes)")
-              .setColor(0xFFD700);
-            channel.send({ embeds: [timeoutEmbed] }).catch(console.error);
-          }
-        },
-
-        onClose: (code) => {
-          this.channelProcesses.delete(channelId);
-        },
+    // Common callbacks used by both CLI and API modes
+    const callbacks = {
+      onInit: (parsed: any) => {
+        this.handleInitMessage(channelId, parsed).catch(console.error);
+        this.db.setSession(channelId, parsed.session_id, channelName);
       },
-      getProcessTimeoutMs(),
-      path.join(process.cwd(), 'log.txt'),
-    );
+
+      onAssistantMessage: (parsed: any) => {
+        this.handleAssistantMessage(channelId, parsed).catch(console.error);
+      },
+
+      onToolResult: (parsed: any) => {
+        this.handleToolResultMessage(channelId, parsed).catch(console.error);
+      },
+
+      onResult: (parsed: any) => {
+        this.handleResultMessage(channelId, parsed).catch(console.error);
+        this.db.setSession(channelId, parsed.session_id, channelName);
+        this.channelProcesses.delete(channelId);
+      },
+
+      onError: (error: Error) => {
+        console.error(`Claude process error for channel ${channelId}:`, error.message);
+        this.channelProcesses.delete(channelId);
+        const channel = this.channelMessages.get(channelId)?.channel;
+        if (channel) {
+          const errorEmbed = new EmbedBuilder()
+            .setTitle("❌ Claude Code Failed")
+            .setDescription(error.message)
+            .setColor(0xFF0000);
+          channel.send({ embeds: [errorEmbed] }).catch(console.error);
+        }
+      },
+
+      onStderr: (text: string) => {
+        console.error(`Claude stderr (${channelId}):`, text);
+        const channel = this.channelMessages.get(channelId)?.channel;
+        if (channel) {
+          const warningEmbed = new EmbedBuilder()
+            .setTitle("⚠️ Warning")
+            .setDescription(text)
+            .setColor(0xFFA500);
+          channel.send({ embeds: [warningEmbed] }).catch(console.error);
+        }
+      },
+
+      onTimeout: () => {
+        console.log(`Claude process timed out for channel ${channelId}`);
+        this.channelProcesses.delete(channelId);
+        const channel = this.channelMessages.get(channelId)?.channel;
+        if (channel) {
+          const timeoutEmbed = new EmbedBuilder()
+            .setTitle("⏰ Timeout")
+            .setDescription("Claude Code took too long to respond (5 minutes)")
+            .setColor(0xFFD700);
+          channel.send({ embeds: [timeoutEmbed] }).catch(console.error);
+        }
+      },
+
+      onClose: (_code: number | null) => {
+        this.channelProcesses.delete(channelId);
+      },
+    };
+
+    let handle: ProcessHandle;
+
+    // Check if API mode is enabled
+    if (isApiMode()) {
+      console.log('Running in API mode');
+      handle = await createApiRunner(
+        {
+          workingDir,
+          prompt,
+          sessionId,
+          timeoutMs: getProcessTimeoutMs(),
+          platformContext: {
+            platform: 'discord',
+            channelId,
+            userId: discordContext?.userId,
+            permissionManager: this.permissionManager,
+          },
+        },
+        callbacks
+      );
+    } else {
+      // CLI mode - existing behavior unchanged
+      const commandString = buildClaudeCommand(workingDir, prompt, sessionId, discordContext);
+      console.log(`Running command: ${commandString}`);
+
+      handle = spawnClaudeProcess(
+        commandString,
+        callbacks,
+        getProcessTimeoutMs(),
+        path.join(process.cwd(), 'log.txt'),
+      );
+    }
 
     // Update the channel process tracking with actual handle
     const channelProcess = this.channelProcesses.get(channelId);
