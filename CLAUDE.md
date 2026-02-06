@@ -19,103 +19,119 @@ This project uses **Node.js** with **tsx** as the TypeScript runner. Environment
 
 ## Architecture
 
-A Discord + LINE bot that spawns Claude Code CLI processes, with an MCP server for interactive tool permission approvals. Discord uses real-time streaming; LINE uses async task completion with polling.
+A multi-platform bot (Discord, LINE, Slack, Telegram, Email, Web UI) that spawns Claude Code CLI processes, with an MCP server for interactive tool permission approvals. Synchronous platforms (Discord, Slack, Web UI) use real-time streaming; asynchronous platforms (LINE, Telegram, Email) use background task completion with push notifications.
 
 ### Startup Flow (`src/index.ts`)
 
-1. `validateConfig()` - validates environment variables
+1. `validateConfig()` + platform-specific validators - validates environment variables
 2. `MCPPermissionServer.start()` - Express HTTP server on port 3001
-3. `ClaudeManager` + `DiscordBot` created and cross-linked
-4. If LINE env vars set: `LINEClaudeManager` + `LineBotHandler` + `LinePermissionManager` created, LINE routes registered on same Express server
-5. `bot.login()` - connects to Discord
-6. MCP server and bot are connected bidirectionally for reaction handling
+3. For each enabled platform: create ClaudeManager + Bot + PermissionManager, register MCP routes
+4. Start all bots (Discord login, Slack Socket Mode, Telegram long polling, Email IMAP IDLE, Web UI WebSocket)
+5. MCP server and bots are connected bidirectionally for approval handling
 
 ### Core Modules
 
-- **`src/bot/client.ts`** (`DiscordBot`) - Discord.js client, routes messages to Claude, handles approval reactions (✅/❌)
-- **`src/bot/commands.ts`** (`CommandHandler`) - Slash command registration (`/clear`)
-- **`src/claude/manager.ts`** (`ClaudeManager`) - Spawns Claude Code CLI as child processes, parses streaming JSON output, updates Discord embeds in real-time. Tracks active processes per channel with race condition prevention.
-- **`src/mcp/server.ts`** (`MCPPermissionServer`) - Express HTTP server exposing `approve_tool` via MCP protocol. Uses `StreamableHTTPServerTransport`.
-- **`src/mcp/permission-manager.ts`** (`PermissionManager`) - Bridges MCP permission requests to Discord messages with reaction-based approval. Handles timeouts and auto-decisions.
-- **`src/mcp/permissions.ts`** - Tool safety classification. Safe tools (Read, Glob, Grep, etc.) auto-approve. Dangerous tools (Bash, Write, Edit) require Discord approval.
-- **`src/db/database.ts`** (`DatabaseManager`) - SQLite session persistence (`better-sqlite3`). Stores channel-to-session mappings with 30-day auto-cleanup.
-- **`src/utils/shell.ts`** - Builds the Claude CLI command string. Creates per-session MCP config files in `/tmp` with Discord context as env vars. Handles shell escaping.
-- **`mcp-bridge.cjs`** - Node.js stdio-to-HTTP bridge. Claude Code spawns this as an MCP server; it forwards JSON-RPC to `localhost:3001` with Discord context headers.
+- **`src/mcp/server.ts`** (`MCPPermissionServer`) - Express HTTP server exposing `approve_tool` via MCP protocol. Routes MCP requests to the correct platform's permission manager.
+- **`src/shared/base-permission-manager.ts`** - Abstract approval logic shared by all platforms. Handles tool classification, timeouts, and auto-approve.
+- **`src/shared/permissions.ts`** - Tool safety classification. Safe tools (Read, Glob, Grep, etc.) auto-approve. Dangerous tools (Bash, Write, Edit) require approval.
+- **`src/shared/process-runner.ts`** - Shared process spawn + JSON stream parser. Callback-based, no platform dependencies.
+- **`src/shared/shell.ts`** - Builds the Claude CLI command string. Creates per-session MCP config files in `/tmp` with platform context as env vars.
+- **`src/db/database.ts`** (`DatabaseManager`) - SQLite session persistence (`better-sqlite3`). Stores channel-to-session mappings with auto-cleanup.
+- **`mcp-bridge.cjs`** - Node.js stdio-to-HTTP bridge. Claude Code spawns this as an MCP server; it forwards JSON-RPC to `localhost:3001` with platform context headers.
 
-#### LINE Modules (parallel path, does not modify Discord code)
+### Platform Modules (`src/channel/<platform>/`)
 
-- **`src/claude/process-runner.ts`** - Shared process spawn + JSON stream parser. Callback-based, no platform dependencies. Used by `LINEClaudeManager`.
-- **`src/line/bot.ts`** (`LineBotHandler`) - LINE webhook handler. Validates HMAC signature, routes commands (`/project`, `/result`, `/status`, `/clear`), handles Postback events for approvals. Auto-leaves groups.
-- **`src/line/manager.ts`** (`LINEClaudeManager`) - Spawns Claude Code using process-runner, accumulates tool calls + result, stores in `line_task_results` table. Pushes notification on completion if quota available.
-- **`src/line/permission-manager.ts`** (`LinePermissionManager`) - Sends Flex Message with Approve/Deny Postback buttons. 5-min timeout (auto-deny).
-- **`src/line/messages.ts`** - Flex Message builders for results, approvals, project lists.
-- **`src/line/shell.ts`** - Builds Claude CLI command with LINE MCP config.
-- **`src/line/types.ts`** - LINE-specific type definitions.
-- **`line-mcp-bridge.cjs`** - LINE version of MCP bridge (posts to `/line/mcp` with `X-Line-*` headers).
+Each platform directory follows the same structure:
+- `client.ts` — Bot client (event handling, commands, message routing)
+- `manager.ts` — Claude Code session/task management
+- `permission-manager.ts` — Platform-specific approval UX (extends `BasePermissionManager`)
+- `shell.ts` — Platform-specific CLI command builder
+- `types.ts` — Type definitions
 
-### Message Flow
+Platforms: `discord/`, `line/`, `slack/`, `telegram/`, `email/`, `webui/`
+
+### Message Flow (Synchronous — Discord, Slack, Web UI)
 
 ```
-Discord message → DiscordBot.handleMessage() → ClaudeManager.runClaudeCode()
+User message → Bot.handleMessage() → ClaudeManager.runClaudeCode()
   → spawns: /bin/bash with `claude --output-format stream-json` command
   → reads streaming JSON (system.init, assistant, user, result message types)
-  → updates Discord embeds in real-time
+  → updates platform messages in real-time
+```
+
+### Message Flow (Asynchronous — LINE, Telegram, Email)
+
+```
+User message → Bot handler → reply "Processing..." → ClaudeManager.runTask() (background)
+  → spawnClaudeProcess → accumulates results → stores in task_results table
+  → push notification on completion
+User sends /result → reply with stored result
 ```
 
 ### Permission Flow
 
 ```
 Claude Code needs tool approval → spawns mcp-bridge.cjs (stdio)
-  → HTTP POST to localhost:3001/mcp with Discord context headers
-  → MCPPermissionServer → PermissionManager.requestApproval()
-  → sends Discord embed with ✅/❌ reactions → waits for user reaction
+  → HTTP POST to localhost:3001/<platform>/mcp with platform context headers
+  → MCPPermissionServer → PlatformPermissionManager.requestApproval()
+  → sends platform-native approval prompt → waits for user response
   → returns allow/deny decision back through the chain
 ```
 
-### Channel-to-Folder Mapping
+### Project-to-Folder Mapping
 
-Each Discord channel name maps directly to a folder under `BASE_FOLDER`. Channel `#my-project` operates in `BASE_FOLDER/my-project`. The "general" channel is skipped.
-
-### LINE Message Flow (async)
-
-```
-LINE message → POST /line/webhook → LineBotHandler
-  → validates HMAC signature, auth check (allowlist)
-  → /project, /result, /status, /clear commands handled directly via Reply API (free)
-  → regular text: Reply "Processing..." → LINEClaudeManager.runTask() (background)
-    → spawnClaudeProcess → accumulates results → stores in line_task_results
-    → push notification if quota available
-User sends /result → Reply with Flex Message showing stored result
-```
-
-### LINE Permission Flow
-
-```
-Claude Code needs approval → line-mcp-bridge.cjs → POST /line/mcp
-  → LinePermissionManager → Push Flex Message with Approve/Deny buttons
-  → User taps button → Postback event → handlePostback() → resolve
-  → 5-min timeout → auto-deny
-```
+- **Discord/Slack channels**: Channel name maps directly to folder under `BASE_FOLDER`. Channel `#my-project` → `BASE_FOLDER/my-project`. The "general" channel is skipped.
+- **LINE/Telegram DMs**: User selects project via `/project <name>` command.
+- **Slack DMs**: User selects project via `/project <name>` command.
+- **Email**: Subject tag `[project-name]` maps to folder.
+- **Web UI**: Dropdown selector lists available folders.
 
 ### Session Persistence
 
-Session IDs from Claude Code's `system.init` messages are stored in SQLite. On subsequent messages in the same channel, the session is resumed via `--resume <sessionId>`. LINE uses `line:{userId}:{projectName}` as session keys to avoid collision with Discord channel IDs.
+Session IDs from Claude Code's `system.init` messages are stored in SQLite. On subsequent messages in the same channel/project, the session is resumed via `--resume <sessionId>`. Each platform uses unique session key prefixes to avoid collisions (e.g., `slack:dm:{userId}:{project}`, `line:{userId}:{project}`).
 
 ## Environment Variables
 
 Required:
+- `BASE_FOLDER` - Base path for project-to-folder mapping
+
+At least one platform must be configured. Each platform is optional.
+
+Discord:
 - `DISCORD_TOKEN` - Bot token
 - `ALLOWED_USER_IDS` - Comma-separated Discord user IDs authorized to use the bot
-- `BASE_FOLDER` - Base path for channel-to-folder mapping
+- `DISCORD_CHANNEL_IDS` - Comma-separated channel IDs to restrict the bot to (default: all channels)
 
-Optional (Discord):
-- `DISCORD_CHANNEL_IDS` - Comma-separated Discord channel IDs to restrict the bot to (default: all channels)
-- `MCP_SERVER_PORT` - MCP HTTP server port (default: 3001)
-- `MCP_APPROVAL_TIMEOUT` - Seconds to wait for approval reaction (default: 30)
-- `MCP_DEFAULT_ON_TIMEOUT` - Auto-decision on timeout: "allow" or "deny" (default: deny)
-
-Optional (LINE — if not set, LINE bot is skipped):
+LINE:
 - `LINE_CHANNEL_ACCESS_TOKEN` - LINE Bot channel access token
 - `LINE_CHANNEL_SECRET` - LINE Bot channel secret (for webhook HMAC signature)
 - `LINE_ALLOWED_USER_IDS` - Comma-separated LINE user IDs authorized to use the bot
 - `LINE_APPROVAL_TIMEOUT` - Seconds to wait for LINE approval (default: 300)
+
+Slack:
+- `SLACK_BOT_TOKEN` - Slack Bot token
+- `SLACK_APP_TOKEN` - Slack App-level token (Socket Mode)
+- `SLACK_SIGNING_SECRET` - Slack signing secret
+- `SLACK_ALLOWED_USER_IDS` - Comma-separated Slack user IDs authorized to use the bot
+- `SLACK_CHANNEL_IDS` - Comma-separated channel IDs to restrict the bot to (default: all channels)
+
+Telegram:
+- `TELEGRAM_BOT_TOKEN` - Telegram Bot token
+- `TELEGRAM_ALLOWED_USER_IDS` - Comma-separated Telegram user IDs (numeric)
+- `TELEGRAM_APPROVAL_TIMEOUT` - Seconds to wait for approval (default: 300)
+
+Email:
+- `EMAIL_USER` - Email address (e.g., claude-bot@gmail.com)
+- `EMAIL_PASS` - Email password or app password
+- `EMAIL_ALLOWED_SENDERS` - Comma-separated allowed sender emails
+
+Web UI:
+- `WEB_UI_ENABLED` - Set to `true` to enable
+- `WEB_UI_PASSWORD` - Optional password for auth
+
+General:
+- `MCP_SERVER_PORT` - MCP HTTP server port (default: 3001)
+- `MCP_APPROVAL_TIMEOUT` - Seconds to wait for Discord/Slack approval reaction (default: 30)
+- `MCP_DEFAULT_ON_TIMEOUT` - Auto-decision on timeout: "allow" or "deny" (default: deny)
+- `CLAUDE_PROCESS_TIMEOUT` - Seconds before killing a Claude process (default: 300)
+- `AUTO_APPROVE_TOOLS` - Comma-separated tool names to auto-approve (e.g., `Edit,Write`)

@@ -143,6 +143,7 @@ DISCORD_CHANNEL_IDS=123456789,987654321   # 選填：限制特定頻道
 | 指令 | 說明 |
 |------|------|
 | 任何訊息 | 以訊息內容作為 prompt 執行 Claude Code |
+| `/cancel` | 取消當前執行中的任務（工作階段保留）|
 | `/clear` | 重設當前頻道的工作階段 |
 
 **審批**：當 Claude 需要執行危險工具時，機器人會發出審批訊息。以 :white_check_mark: 反應核准，:x: 反應拒絕。逾時：30 秒。
@@ -171,6 +172,7 @@ LINE_ALLOWED_USER_IDS=U1234abc,U5678def   # 選填：限制使用者
 | `/project <名稱>` | 選擇專案 |
 | `/result` | 取得最新任務結果 |
 | `/status` | 查看執行中的任務 |
+| `/cancel` | 取消當前執行中的任務（工作階段保留）|
 | `/clear` | 清除當前專案的工作階段 |
 | `/help` | 顯示說明 |
 | 任何訊息 | 執行 Claude Code（需先選擇專案）|
@@ -259,6 +261,7 @@ TELEGRAM_ALLOWED_USER_IDS=123456789,987654321   # 選填：限制使用者
 | `/project <名稱>` | 選擇專案 |
 | `/result` | 取得最新任務結果 |
 | `/status` | 查看執行中的任務 |
+| `/cancel` | 取消當前執行中的任務（工作階段保留）|
 | `/clear` | 清除當前專案的工作階段 |
 | `/help` | 顯示說明 |
 | 任何訊息 | 執行 Claude Code（需先選擇專案）|
@@ -324,6 +327,7 @@ WEB_UI_PASSWORD=your_secret_password   # 選填：不設定則無需密碼
 |------|------|
 | 選擇專案下拉選單 | 選擇要操作的專案資料夾 |
 | 輸入訊息 + 送出 | 以你的訊息作為 prompt 執行 Claude Code |
+| Cancel Task 按鈕 | 取消當前執行中的任務（工作階段保留）|
 | Clear Session 按鈕 | 清除當前專案的工作階段 |
 
 **審批**：當 Claude 需要執行危險工具時，瀏覽器會彈出審批視窗，包含 Approve / Deny 按鈕。逾時：120 秒。
