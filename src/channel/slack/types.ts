@@ -3,4 +3,5 @@ export interface SlackConfig {
   appToken: string;
   signingSecret: string;
   allowedUserIds: string[];
+  allowedChannelIds: string[];
 }

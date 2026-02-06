@@ -16,10 +16,15 @@ export function validateConfig(): Config {
   const discordToken = process.env.DISCORD_TOKEN;
   const allowedUserIds = process.env.ALLOWED_USER_IDS;
 
+  const allowedChannelIds = process.env.DISCORD_CHANNEL_IDS;
+
   const discord = discordToken && allowedUserIds
     ? {
         token: discordToken,
         allowedUserIds: allowedUserIds.split(',').map(id => id.trim()).filter(Boolean),
+        allowedChannelIds: allowedChannelIds
+          ? allowedChannelIds.split(',').map(id => id.trim()).filter(Boolean)
+          : [],
       }
     : undefined;
 
@@ -66,6 +71,7 @@ export function validateSlackConfig(): SlackConfig | null {
   }
 
   const allowedUserIds = process.env.SLACK_ALLOWED_USER_IDS;
+  const slackChannelIds = process.env.SLACK_CHANNEL_IDS;
 
   return {
     botToken,
@@ -73,6 +79,9 @@ export function validateSlackConfig(): SlackConfig | null {
     signingSecret,
     allowedUserIds: allowedUserIds
       ? allowedUserIds.split(',').map(id => id.trim()).filter(Boolean)
+      : [],
+    allowedChannelIds: slackChannelIds
+      ? slackChannelIds.split(',').map(id => id.trim()).filter(Boolean)
       : [],
   };
 }

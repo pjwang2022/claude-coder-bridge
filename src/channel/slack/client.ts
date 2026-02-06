@@ -109,6 +109,11 @@ export class SlackBot {
       return;
     }
 
+    // Only process allowed channels (if configured)
+    if (this.config.allowedChannelIds.length > 0 && !this.config.allowedChannelIds.includes(channelId)) {
+      return;
+    }
+
     // Build prompt from text + attachments
     const workingDir = path.join(this.baseFolder, channelName);
     const prompt = await this.buildPromptFromEvent(event, channelId, workingDir);

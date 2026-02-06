@@ -25,6 +25,7 @@ describe('validateConfig', () => {
       discord: {
         token: 'test-token',
         allowedUserIds: ['test-user-id'],
+        allowedChannelIds: [],
       },
     });
   });
@@ -41,6 +42,25 @@ describe('validateConfig', () => {
       discord: {
         token: 'test-token',
         allowedUserIds: ['user-1', 'user-2', 'user-3'],
+        allowedChannelIds: [],
+      },
+    });
+  });
+
+  it('should parse comma-separated DISCORD_CHANNEL_IDS', () => {
+    process.env.DISCORD_TOKEN = 'test-token';
+    process.env.ALLOWED_USER_IDS = 'test-user-id';
+    process.env.DISCORD_CHANNEL_IDS = 'ch-1, ch-2';
+    process.env.BASE_FOLDER = '/test/folder';
+
+    const config = validateConfig();
+
+    expect(config).toEqual({
+      baseFolder: '/test/folder',
+      discord: {
+        token: 'test-token',
+        allowedUserIds: ['test-user-id'],
+        allowedChannelIds: ['ch-1', 'ch-2'],
       },
     });
   });

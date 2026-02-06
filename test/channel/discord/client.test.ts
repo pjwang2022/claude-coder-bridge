@@ -35,9 +35,10 @@ const mockClaudeManager = {
 describe('DiscordBot', () => {
   let discordBot: DiscordBot;
   const allowedUserIds = ['user-123'];
+  const allowedChannelIds: string[] = [];
 
   beforeEach(() => {
-    discordBot = new DiscordBot(mockClaudeManager as any, allowedUserIds, '/test/base');
+    discordBot = new DiscordBot(mockClaudeManager as any, allowedUserIds, allowedChannelIds, '/test/base');
     vi.clearAllMocks();
   });
 
@@ -58,7 +59,7 @@ describe('DiscordBot', () => {
   
   describe('constructor', () => {
     it('should create instance without throwing', () => {
-      expect(() => new DiscordBot(mockClaudeManager as any, allowedUserIds, '/test/base')).not.toThrow();
+      expect(() => new DiscordBot(mockClaudeManager as any, allowedUserIds, allowedChannelIds, '/test/base')).not.toThrow();
     });
   });
 });

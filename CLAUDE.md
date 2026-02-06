@@ -109,6 +109,7 @@ Required:
 - `BASE_FOLDER` - Base path for channel-to-folder mapping
 
 Optional (Discord):
+- `DISCORD_CHANNEL_IDS` - Comma-separated Discord channel IDs to restrict the bot to (default: all channels)
 - `MCP_SERVER_PORT` - MCP HTTP server port (default: 3001)
 - `MCP_APPROVAL_TIMEOUT` - Seconds to wait for approval reaction (default: 30)
 - `MCP_DEFAULT_ON_TIMEOUT` - Auto-decision on timeout: "allow" or "deny" (default: deny)

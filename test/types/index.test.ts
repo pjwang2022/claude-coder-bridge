@@ -109,12 +109,14 @@ describe('Types', () => {
         discord: {
           token: "token-123",
           allowedUserIds: ["user-456", "user-789"],
+          allowedChannelIds: ["ch-1"],
         },
       };
 
       expect(config.baseFolder).toBe("/test/folder");
       expect(config.discord?.token).toBe("token-123");
       expect(config.discord?.allowedUserIds).toEqual(["user-456", "user-789"]);
+      expect(config.discord?.allowedChannelIds).toEqual(["ch-1"]);
     });
 
     it('should accept config without discord', () => {

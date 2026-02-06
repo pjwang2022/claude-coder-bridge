@@ -47,7 +47,7 @@ async function main() {
 
   if (config.discord) {
     claudeManager = new ClaudeManager(config.baseFolder);
-    bot = new DiscordBot(claudeManager, config.discord.allowedUserIds, config.baseFolder);
+    bot = new DiscordBot(claudeManager, config.discord.allowedUserIds, config.discord.allowedChannelIds, config.baseFolder);
     mcpServer.setDiscordBot(bot);
     // Set permission manager for API mode
     claudeManager.setPermissionManager(mcpServer.getPermissionManager());

@@ -47,6 +47,7 @@ describe('SlackBot', () => {
     appToken: 'xapp-test-token',
     signingSecret: 'test-signing-secret',
     allowedUserIds: ['U123'],
+    allowedChannelIds: [],
   };
 
   const mockClaudeManager = {

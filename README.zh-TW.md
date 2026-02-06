@@ -133,6 +133,7 @@ BASE_FOLDER=/Users/you/repos
 ```env
 DISCORD_TOKEN=your_bot_token
 ALLOWED_USER_IDS=your_discord_user_id1,your_discord_user_id2
+DISCORD_CHANNEL_IDS=123456789,987654321   # 選填：限制特定頻道
 ```
 
 **取得 User ID**：Discord 設定 > 進階 > 啟用開發者模式 > 右鍵點擊你的名字 > 複製使用者 ID
@@ -213,6 +214,7 @@ SLACK_BOT_TOKEN=xoxb-your-bot-token
 SLACK_APP_TOKEN=xapp-your-app-token
 SLACK_SIGNING_SECRET=your_signing_secret
 SLACK_ALLOWED_USER_IDS=U01234567,U89012345   # 選填：限制使用者
+SLACK_CHANNEL_IDS=C01234567,C89012345       # 選填：限制特定頻道
 ```
 
 **使用方式**：邀請機器人到與資料夾同名的頻道，或傳送私訊。

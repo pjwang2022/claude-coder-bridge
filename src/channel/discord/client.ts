@@ -19,6 +19,7 @@ export class DiscordBot {
   constructor(
     private claudeManager: ClaudeManager,
     private allowedUserIds: string[],
+    private allowedChannelIds: string[],
     private baseFolder: string,
   ) {
     this.client = new Client({
@@ -120,7 +121,12 @@ export class DiscordBot {
     if (channelName === "general") {
       return;
     }
-    
+
+    // Only process allowed channels (if configured)
+    if (this.allowedChannelIds.length > 0 && !this.allowedChannelIds.includes(channelId)) {
+      return;
+    }
+
     const sessionId = this.claudeManager.getSessionId(channelId);
 
     // Build prompt from text + attachments

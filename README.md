@@ -133,6 +133,7 @@ Create a bot at the [Discord Developer Portal](https://discord.com/developers/ap
 ```env
 DISCORD_TOKEN=your_bot_token
 ALLOWED_USER_IDS=your_discord_user_id1,your_discord_user_id2
+DISCORD_CHANNEL_IDS=123456789,987654321   # Optional: restrict to specific channels
 ```
 
 **How to get your User ID**: Discord Settings > Advanced > Enable Developer Mode > Right-click your name > Copy User ID
@@ -215,6 +216,7 @@ SLACK_BOT_TOKEN=xoxb-your-bot-token
 SLACK_APP_TOKEN=xapp-your-app-token
 SLACK_SIGNING_SECRET=your_signing_secret
 SLACK_ALLOWED_USER_IDS=U01234567,U89012345   # Optional: restrict access
+SLACK_CHANNEL_IDS=C01234567,C89012345       # Optional: restrict to specific channels
 ```
 
 **Usage**: Invite the bot to channels matching your folder names, or send direct messages.

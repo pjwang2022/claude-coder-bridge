@@ -56,5 +56,6 @@ export interface Config {
   discord?: {
     token: string;
     allowedUserIds: string[];
+    allowedChannelIds: string[];
   };
 }
