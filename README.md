@@ -132,7 +132,7 @@ Create a bot at the [Discord Developer Portal](https://discord.com/developers/ap
 
 ```env
 DISCORD_TOKEN=your_bot_token
-ALLOWED_USER_ID=your_discord_user_id
+ALLOWED_USER_IDS=your_discord_user_id1,your_discord_user_id2
 ```
 
 **How to get your User ID**: Discord Settings > Advanced > Enable Developer Mode > Right-click your name > Copy User ID

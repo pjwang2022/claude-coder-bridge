@@ -132,7 +132,7 @@ BASE_FOLDER=/Users/you/repos
 
 ```env
 DISCORD_TOKEN=your_bot_token
-ALLOWED_USER_ID=your_discord_user_id
+ALLOWED_USER_IDS=your_discord_user_id1,your_discord_user_id2
 ```
 
 **取得 User ID**：Discord 設定 > 進階 > 啟用開發者模式 > 右鍵點擊你的名字 > 複製使用者 ID

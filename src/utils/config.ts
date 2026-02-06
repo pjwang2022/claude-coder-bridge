@@ -14,10 +14,13 @@ export function validateConfig(): Config {
   }
 
   const discordToken = process.env.DISCORD_TOKEN;
-  const allowedUserId = process.env.ALLOWED_USER_ID;
+  const allowedUserIds = process.env.ALLOWED_USER_IDS;
 
-  const discord = discordToken && allowedUserId
-    ? { token: discordToken, allowedUserId }
+  const discord = discordToken && allowedUserIds
+    ? {
+        token: discordToken,
+        allowedUserIds: allowedUserIds.split(',').map(id => id.trim()).filter(Boolean),
+      }
     : undefined;
 
   return {

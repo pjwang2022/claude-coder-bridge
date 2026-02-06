@@ -15,7 +15,7 @@ describe('validateConfig', () => {
 
   it('should return config with discord when all Discord variables are set', () => {
     process.env.DISCORD_TOKEN = 'test-token';
-    process.env.ALLOWED_USER_ID = 'test-user-id';
+    process.env.ALLOWED_USER_IDS = 'test-user-id';
     process.env.BASE_FOLDER = '/test/folder';
 
     const config = validateConfig();
@@ -24,14 +24,30 @@ describe('validateConfig', () => {
       baseFolder: '/test/folder',
       discord: {
         token: 'test-token',
-        allowedUserId: 'test-user-id',
+        allowedUserIds: ['test-user-id'],
+      },
+    });
+  });
+
+  it('should support comma-separated ALLOWED_USER_IDS', () => {
+    process.env.DISCORD_TOKEN = 'test-token';
+    process.env.ALLOWED_USER_IDS = 'user-1, user-2, user-3';
+    process.env.BASE_FOLDER = '/test/folder';
+
+    const config = validateConfig();
+
+    expect(config).toEqual({
+      baseFolder: '/test/folder',
+      discord: {
+        token: 'test-token',
+        allowedUserIds: ['user-1', 'user-2', 'user-3'],
       },
     });
   });
 
   it('should return config without discord when DISCORD_TOKEN is missing', () => {
     delete process.env.DISCORD_TOKEN;
-    process.env.ALLOWED_USER_ID = 'test-user-id';
+    process.env.ALLOWED_USER_IDS = 'test-user-id';
     process.env.BASE_FOLDER = '/test/folder';
 
     const config = validateConfig();
@@ -42,9 +58,9 @@ describe('validateConfig', () => {
     });
   });
 
-  it('should return config without discord when ALLOWED_USER_ID is missing', () => {
+  it('should return config without discord when ALLOWED_USER_IDS is missing', () => {
     process.env.DISCORD_TOKEN = 'test-token';
-    delete process.env.ALLOWED_USER_ID;
+    delete process.env.ALLOWED_USER_IDS;
     process.env.BASE_FOLDER = '/test/folder';
 
     const config = validateConfig();
@@ -57,7 +73,7 @@ describe('validateConfig', () => {
 
   it('should exit with error when BASE_FOLDER is missing', () => {
     process.env.DISCORD_TOKEN = 'test-token';
-    process.env.ALLOWED_USER_ID = 'test-user-id';
+    process.env.ALLOWED_USER_IDS = 'test-user-id';
     delete process.env.BASE_FOLDER;
 
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => {

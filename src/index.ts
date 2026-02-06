@@ -27,7 +27,7 @@ async function main() {
   const emailConfig = validateEmailConfig();
   const webUIConfig = validateWebUIConfig();
   if (!config.discord && !lineConfig && !slackConfig && !telegramConfig && !emailConfig && !webUIConfig) {
-    console.error('No platform configured. Set DISCORD_TOKEN + ALLOWED_USER_ID for Discord, LINE_CHANNEL_ACCESS_TOKEN + LINE_CHANNEL_SECRET for LINE, SLACK_BOT_TOKEN + SLACK_APP_TOKEN + SLACK_SIGNING_SECRET for Slack, TELEGRAM_BOT_TOKEN for Telegram, EMAIL_USER + EMAIL_PASS for Email, or WEB_UI_ENABLED=true for Web UI.');
+    console.error('No platform configured. Set DISCORD_TOKEN + ALLOWED_USER_IDS for Discord, LINE_CHANNEL_ACCESS_TOKEN + LINE_CHANNEL_SECRET for LINE, SLACK_BOT_TOKEN + SLACK_APP_TOKEN + SLACK_SIGNING_SECRET for Slack, TELEGRAM_BOT_TOKEN for Telegram, EMAIL_USER + EMAIL_PASS for Email, or WEB_UI_ENABLED=true for Web UI.');
     process.exit(1);
   }
 
@@ -47,7 +47,7 @@ async function main() {
 
   if (config.discord) {
     claudeManager = new ClaudeManager(config.baseFolder);
-    bot = new DiscordBot(claudeManager, config.discord.allowedUserId, config.baseFolder);
+    bot = new DiscordBot(claudeManager, config.discord.allowedUserIds, config.baseFolder);
     mcpServer.setDiscordBot(bot);
     // Set permission manager for API mode
     claudeManager.setPermissionManager(mcpServer.getPermissionManager());

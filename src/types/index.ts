@@ -55,6 +55,6 @@ export interface Config {
   baseFolder: string;
   discord?: {
     token: string;
-    allowedUserId: string;
+    allowedUserIds: string[];
   };
 }

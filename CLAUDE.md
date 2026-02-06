@@ -105,7 +105,7 @@ Session IDs from Claude Code's `system.init` messages are stored in SQLite. On s
 
 Required:
 - `DISCORD_TOKEN` - Bot token
-- `ALLOWED_USER_ID` - Discord user ID authorized to use the bot
+- `ALLOWED_USER_IDS` - Comma-separated Discord user IDs authorized to use the bot
 - `BASE_FOLDER` - Base path for channel-to-folder mapping
 
 Optional (Discord):

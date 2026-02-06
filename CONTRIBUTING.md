@@ -27,7 +27,7 @@ npm run test:run
 ## Security Notes
 
 - **Private Server Recommended**: Use a private Discord server for your repositories to avoid exposing project details
-- **User Restriction**: Only the configured `ALLOWED_USER_ID` can interact with the bot
+- **User Restriction**: Only the configured `ALLOWED_USER_IDS` can interact with the bot
 - **Environment Variables**: Keep your `.env` file secure and never commit it to version control
 - **Bot Token**: Keep your Discord bot token secure - treat it like a password
 
@@ -36,7 +36,7 @@ npm run test:run
 ### Bot doesn't respond
 
 - Check that the bot has proper permissions in the channel
-- Verify your `ALLOWED_USER_ID` is correct
+- Verify your `ALLOWED_USER_IDS` is correct
 - Check the console for error messages
 
 ### "Working directory does not exist" error

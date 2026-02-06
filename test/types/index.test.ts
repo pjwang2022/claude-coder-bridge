@@ -108,13 +108,13 @@ describe('Types', () => {
         baseFolder: "/test/folder",
         discord: {
           token: "token-123",
-          allowedUserId: "user-456",
+          allowedUserIds: ["user-456", "user-789"],
         },
       };
 
       expect(config.baseFolder).toBe("/test/folder");
       expect(config.discord?.token).toBe("token-123");
-      expect(config.discord?.allowedUserId).toBe("user-456");
+      expect(config.discord?.allowedUserIds).toEqual(["user-456", "user-789"]);
     });
 
     it('should accept config without discord', () => {

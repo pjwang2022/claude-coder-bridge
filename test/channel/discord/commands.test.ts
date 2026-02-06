@@ -10,10 +10,10 @@ const mockClaudeManager = {
 
 describe('CommandHandler', () => {
   let commandHandler: CommandHandler;
-  const allowedUserId = 'user-123';
+  const allowedUserIds = ['user-123'];
 
   beforeEach(() => {
-    commandHandler = new CommandHandler(mockClaudeManager as any, allowedUserId);
+    commandHandler = new CommandHandler(mockClaudeManager as any, allowedUserIds);
     vi.clearAllMocks();
   });
 
@@ -57,7 +57,7 @@ describe('CommandHandler', () => {
       const channelId = 'channel-123';
       const mockInteraction = {
         isChatInputCommand: () => true,
-        user: { id: allowedUserId },
+        user: { id: allowedUserIds[0] },
         channelId,
         commandName: 'clear',
         reply: vi.fn(),
@@ -76,7 +76,7 @@ describe('CommandHandler', () => {
       mockClaudeManager.hasActiveProcess.mockReturnValue(true);
       const mockInteraction = {
         isChatInputCommand: () => true,
-        user: { id: allowedUserId },
+        user: { id: allowedUserIds[0] },
         channelId,
         commandName: 'cancel',
         reply: vi.fn(),
@@ -96,7 +96,7 @@ describe('CommandHandler', () => {
       mockClaudeManager.hasActiveProcess.mockReturnValue(false);
       const mockInteraction = {
         isChatInputCommand: () => true,
-        user: { id: allowedUserId },
+        user: { id: allowedUserIds[0] },
         channelId,
         commandName: 'cancel',
         reply: vi.fn(),
@@ -112,7 +112,7 @@ describe('CommandHandler', () => {
     it('should ignore unknown commands', async () => {
       const mockInteraction = {
         isChatInputCommand: () => true,
-        user: { id: allowedUserId },
+        user: { id: allowedUserIds[0] },
         channelId: 'channel-123',
         commandName: 'unknown',
         reply: vi.fn(),
