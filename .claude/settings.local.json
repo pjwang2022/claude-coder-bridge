@@ -44,7 +44,9 @@
       "WebFetch(domain:docs.claude.com)",
       "Bash(./node_modules/.bin/vitest run:*)",
       "WebFetch(domain:raw.githubusercontent.com)",
-      "Bash(gh api:*)"
+      "Bash(gh api:*)",
+      "Bash(xargs cat:*)",
+      "Bash(git status:*)"
     ],
     "deny": []
   }
