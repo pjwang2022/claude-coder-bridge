@@ -4,7 +4,7 @@
 
 Run [Claude Code](https://docs.anthropic.com/en/docs/claude-code) sessions from Discord, LINE, Slack, Telegram, Email, or Web UI. Each platform maps messages to project folders on your filesystem, with interactive tool approval, session persistence, and real-time streaming.
 
-![image](https://github.com/user-attachments/assets/d78c6dcd-eb28-48b6-be1c-74e25935b86b)
+![image](public/demo.png)
 
 > **⚠️ Warning: Personal Use Only**
 >

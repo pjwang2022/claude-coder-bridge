@@ -4,7 +4,7 @@
 
 透過 Discord、LINE、Slack、Telegram、Email 或 Web UI 執行 [Claude Code](https://docs.anthropic.com/en/docs/claude-code) 工作階段。每個平台將訊息對應到你檔案系統上的專案資料夾，支援互動式工具審批、工作階段持久化，以及即時串流輸出。
 
-![image](https://github.com/user-attachments/assets/d78c6dcd-eb28-48b6-be1c-74e25935b86b)
+![image](public/demo.png)
 
 > **⚠️ 警告：僅限個人使用**
 >
